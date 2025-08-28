@@ -7,8 +7,16 @@ export default defineNitroPlugin((nitroApp) => {
 })
 
 function startScheduler(nitroApp) {
+    // Track database update statistics
+    let updateStats = {
+        totalCycles: 0,
+        totalUpdates: 0,
+        lastReportTime: Date.now()
+    };
+    
     setIntervalAsync(async () => {
         try {
+            updateStats.totalCycles++;
             // get all bots that are either running OR have an active deal to manage
             let activeBots = await dcaBotSchema.find({
                 $or: [
@@ -23,6 +31,21 @@ function startScheduler(nitroApp) {
             });
             for (let bot of activeBots) {
                 try {
+                    // Track if bot state changed to determine if we need to save
+                    const originalStatus = bot.activeDeal.status;
+                    const originalLogsLength = bot.logs.length;
+                    const originalFilledOrdersLength = bot.activeDeal.filledOrders?.length || 0;
+                    const originalProfit = bot.profit;
+                    const originalDealProfit = bot.activeDeal.profit;
+                    const originalClosedDealsLength = bot.closedDeals?.length || 0;
+                    const originalBaseOrderId = bot.activeDeal.baseOrder?.id;
+                    const originalSafetyOrderId = bot.activeDeal.safetyOrder?.id;
+                    const originalTpOrderId = bot.activeDeal.takeProfitOrder?.id;
+                    const originalStopLossOrderId = bot.activeDeal.stopLossOrder?.id;
+                    const originalDetectedDirection = bot.activeDeal.detectedDirection;
+                    const originalWaitingForEntry = bot.activeDeal.waitingForEntry;
+                    let needsUpdate = false;
+                    
                     // console.log(bot.activeDeal.status);
 
                     //NEW_DEAL --> 0
@@ -59,8 +82,10 @@ function startScheduler(nitroApp) {
                                         bot.logs.push(log);
                                         console.log(log);
                                     }
-                                    // Stay in START_NEW_DEAL status to check again next cycle
-                                    await dcaBotSchema.updateOne({_id: bot._id}, bot);
+                                    // Only update if we just started waiting (not every cycle)
+                                    if (originalLogsLength !== bot.logs.length) {
+                                        await dcaBotSchema.updateOne({_id: bot._id}, bot);
+                                    }
                                     continue; // Skip to next bot
                                 }
                                 
@@ -147,13 +172,54 @@ function startScheduler(nitroApp) {
                 console.log(log);
             }
 
-                    await dcaBotSchema.updateOne({_id: bot._id}, bot);
+                    // Determine if we need to update the database
+                    needsUpdate = 
+                        // Status changed
+                        bot.activeDeal.status !== originalStatus ||
+                        // New logs were added
+                        bot.logs.length !== originalLogsLength ||
+                        // Orders were filled (filledOrders array grew)
+                        (bot.activeDeal.filledOrders?.length || 0) !== originalFilledOrdersLength ||
+                        // Profit changed
+                        bot.profit !== originalProfit ||
+                        bot.activeDeal.profit !== originalDealProfit ||
+                        // New deal completed
+                        (bot.closedDeals?.length || 0) !== originalClosedDealsLength ||
+                        // New orders were placed (comparing order IDs)
+                        bot.activeDeal.baseOrder?.id !== originalBaseOrderId ||
+                        bot.activeDeal.safetyOrder?.id !== originalSafetyOrderId ||
+                        bot.activeDeal.takeProfitOrder?.id !== originalTpOrderId ||
+                        bot.activeDeal.stopLossOrder?.id !== originalStopLossOrderId ||
+                        // Direction was detected (for auto mode)
+                        bot.activeDeal.detectedDirection !== originalDetectedDirection ||
+                        // Waiting for entry status changed  
+                        bot.activeDeal.waitingForEntry !== originalWaitingForEntry;
+                    
+                    // Only update database if something actually changed
+                    if (needsUpdate) {
+                        await dcaBotSchema.updateOne({_id: bot._id}, bot);
+                        updateStats.totalUpdates++;
+                        // console.log(`Updated bot ${bot.symbol} - Status: ${bot.activeDeal.status}`);
+                    }
                 } catch (botError) {
                     console.error(`Error processing bot ${bot._id}:`, botError);
                     let errorLog = `${nitroApp.DCALib.getCurrentTime()}: ${bot.symbol} - ERROR: ${botError.message}`;
                     bot.logs.push(errorLog);
                     await dcaBotSchema.updateOne({_id: bot._id}, { $push: { logs: errorLog } });
                 }
+            }
+            
+            // Report statistics every 60 seconds
+            const now = Date.now();
+            if (now - updateStats.lastReportTime > 60000) {
+                const efficiency = updateStats.totalCycles > 0 
+                    ? ((1 - updateStats.totalUpdates / updateStats.totalCycles) * 100).toFixed(1)
+                    : 0;
+                console.log(`📊 DCA Engine DB Efficiency: ${efficiency}% saved (${updateStats.totalUpdates} updates in ${updateStats.totalCycles} cycles)`);
+                // Reset counters
+                updateStats.totalCycles = 0;
+                updateStats.totalUpdates = 0;
+                updateStats.lastReportTime = now;
             }
         } catch (error) {
             console.error('Error in DCA Engine scheduler:', error);

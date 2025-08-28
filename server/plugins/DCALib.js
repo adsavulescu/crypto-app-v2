@@ -165,16 +165,7 @@ export default defineNitroPlugin((nitroApp) => {
                 targetPriceBeforeFees = math.evaluate(`${avgEntryPriceWithFees} * (1 - ${bot.takeProfitOrderPercent} / 100)`);
                 tpPrice = math.evaluate(`${targetPriceBeforeFees} * (1 - ${feeRate})`);
             }
-            
-            console.log(`  Target Price Calculation:`);
-            if (direction === 'long') {
-                console.log(`    Long: Entry ${avgEntryPriceWithFees} * (1 + ${bot.takeProfitOrderPercent}%) / (1 - ${feeRate})`);
-            } else {
-                console.log(`    Short: Entry ${avgEntryPriceWithFees} * (1 - ${bot.takeProfitOrderPercent}%) * (1 - ${feeRate})`);
-            }
-            
-            console.log(`  Target before fees: ${targetPriceBeforeFees}`);
-            console.log(`  Final TP Price: ${tpPrice}`);
+
 
             let type = null;
             let params = null;
