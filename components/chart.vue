@@ -2,12 +2,16 @@
 import { CrossUp, CrossDown } from "technicalindicators";
 import { SMA, RSI, MACD, BollingerBands } from '@debut/indicators';
 import { useAppStore } from '~/stores/app.store';
+import { inject, watch } from 'vue';
 const app = useAppStore()
 
 let userID = useCookie('userID');
 
 // import {createChart, LineStyle} from "lightweight-charts";
 import {clearIntervalAsync, setIntervalAsync} from "set-interval-async";
+
+// Inject theme from app.vue
+const isDark = inject('isDark');
 
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
@@ -51,8 +55,57 @@ let ohlcvInterval = null;
 let timeframeData = null;
 let lastBarTime = null;
 
+// Theme colors function
+const getChartColors = () => {
+  if (isDark.value) {
+    return {
+      backgroundColor: '#18181c',
+      lineColor: '#2B2B43',
+      textColor: '#D9D9D9',
+      gridVertLines: '#2B2B43',
+      gridHorzLines: '#363C4E',
+      crossHair: '#758696'
+    };
+  } else {
+    return {
+      backgroundColor: '#ffffff',
+      lineColor: '#e1e1e1',
+      textColor: '#191919',
+      gridVertLines: '#e1e1e1',
+      gridHorzLines: '#f0f0f0',
+      crossHair: '#9B9B9B'
+    };
+  }
+};
+
+// Update chart theme
+const updateChartTheme = () => {
+  if (chartInstance) {
+    const colors = getChartColors();
+    chartInstance.applyOptions({
+      layout: {
+        backgroundColor: colors.backgroundColor,
+        lineColor: colors.lineColor,
+        textColor: colors.textColor,
+      },
+      grid: {
+        vertLines: {
+          color: colors.gridVertLines,
+        },
+        horzLines: {
+          color: colors.gridHorzLines,
+        },
+      },
+      crossHair: {
+        color: colors.crossHair,
+      },
+    });
+  }
+};
+
 onMounted(async () => {
   const { $lightweightCharts } = useNuxtApp()
+  const colors = getChartColors();
 
   //init chart lib
   chartInstance = $lightweightCharts.createChart('chart', {
@@ -67,22 +120,22 @@ onMounted(async () => {
       },
     },
     layout: {
-      backgroundColor: '#18181c',
-      lineColor: '#2B2B43',
-      textColor: '#D9D9D9',
+      backgroundColor: colors.backgroundColor,
+      lineColor: colors.lineColor,
+      textColor: colors.textColor,
     },
     watermark: {
       color: 'rgba(0, 0, 0, 0)',
     },
     crossHair: {
-      color: '#758696',
+      color: colors.crossHair,
     },
     grid: {
       vertLines: {
-        color: '#2B2B43',
+        color: colors.gridVertLines,
       },
       horzLines: {
-        color: '#363C4E',
+        color: colors.gridHorzLines,
       },
     },
   });
@@ -285,6 +338,11 @@ onMounted(async () => {
 
   //load OHLCV pooling
   ohlcvInterval = setIntervalAsync(fetchOHLCVLivePricePooling, 500);
+  
+  // Watch for theme changes
+  watch(isDark, () => {
+    updateChartTheme();
+  });
 })
 
 
