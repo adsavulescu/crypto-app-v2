@@ -456,7 +456,6 @@ async function fetchBots() {
       let avgEntryPrice = 0;
       
       if (bot.activeDeal && bot.activeDeal.filledOrders && bot.activeDeal.filledOrders.length > 0) {
-        console.log(`Processing ${bot.symbol} (${bot.direction}) filled orders:`, bot.activeDeal.filledOrders);
         // Count entry orders based on direction
         bot.activeDeal.filledOrders.forEach(order => {
           // For long: count buy orders, for short: count sell orders
@@ -472,15 +471,12 @@ async function fetchBots() {
             const cost = typeof order.cost === 'string' ? parseFloat(order.cost) : (amount * price);
             currentPosition += amount;
             totalCost += cost;
-            console.log(`  Order: side=${order.side}, amount=${amount}, price=${price}, cost=${cost}`);
           }
         });
         
         if (currentPosition > 0 && totalCost > 0) {
           avgEntryPrice = totalCost / currentPosition;
         }
-        
-        console.log(`Bot ${bot.symbol} Summary: Position=${currentPosition}, AvgPrice=${avgEntryPrice}, TotalCost=${totalCost}`);
       }
       
       // Calculate target price if TP order exists
@@ -489,7 +485,6 @@ async function fetchBots() {
         targetPrice = typeof bot.activeDeal.takeProfitOrder.price === 'string' 
           ? parseFloat(bot.activeDeal.takeProfitOrder.price) 
           : bot.activeDeal.takeProfitOrder.price;
-        console.log(`Bot ${bot.symbol} TP Order Price: ${targetPrice}`);
       }
       
       // Process closed deals for statistics

@@ -17,16 +17,17 @@
       <div style="width: 40px;"></div> <!-- Spacer for centering -->
     </div>
 
-    <n-grid x-gap="20" y-gap="20" :cols="2">
-      <!-- Left side - Order Book and Market Info -->
+    <!-- Full width ticker bar -->
+    <TickerBar style="margin-bottom: 20px;" />
+    
+    <!-- Order book and form side by side -->
+    <n-grid x-gap="20" :cols="2">
+      <!-- Left side - Order Book (50%) -->
       <n-gi>
-        <n-space vertical :size="20">
-          <TickerBar />
-          <OrderBook />
-        </n-space>
+        <OrderBook />
       </n-gi>
       
-      <!-- Right side - Bot Configuration Form -->
+      <!-- Right side - Bot Configuration Form (50%) -->
       <n-gi>
         <DcaBotsForm />
       </n-gi>

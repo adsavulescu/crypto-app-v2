@@ -1,65 +1,135 @@
 <script setup>
 import { useAppStore } from '~/stores/app.store';
-import {clearIntervalAsync, setIntervalAsync} from "set-interval-async"
 const app = useAppStore()
+const { $socket } = useNuxtApp();
 
 let userID = useCookie('userID');
 
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
 
-
 const bidsData = ref([]);
 const asksData = ref([]);
+const isStreaming = ref(false);
 
-let orderBookInterval = null;
+// Subscribe to order book updates via WebSocket
+const subscribeOrderBook = () => {
+  if (!currentExchange.value || !currentSymbol.value) return;
+  
+  console.log('[OrderBook] Subscribing to order book for', currentSymbol.value);
+  
+  // Request order book subscription
+  $socket.emit('orderbook:subscribe', {
+    userID: userID.value,
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value
+  });
+};
+
+// Unsubscribe from order book updates
+const unsubscribeOrderBook = () => {
+  if (!currentExchange.value || !currentSymbol.value) return;
+  
+  console.log('[OrderBook] Unsubscribing from order book');
+  
+  $socket.emit('orderbook:unsubscribe', {
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value
+  });
+};
+
+// Process order book data
+const processOrderBook = (orderBook) => {
+  let bids = [];
+  let asks = [];
+  
+  // Process bids
+  for (let i = 0; i < Math.min(orderBook.bids.length, 20); i++) {
+    bids.push({
+      price: orderBook.bids[i][0],
+      quantity: orderBook.bids[i][1],
+      total: (orderBook.bids[i][1] * orderBook.bids[i][0]).toFixed(2),
+    });
+  }
+  bidsData.value = bids;
+  
+  // Process asks
+  for (let i = 0; i < Math.min(orderBook.asks.length, 20); i++) {
+    asks.push({
+      price: orderBook.asks[i][0],
+      quantity: orderBook.asks[i][1],
+      total: (orderBook.asks[i][1] * orderBook.asks[i][0]).toFixed(2),
+    });
+  }
+  asksData.value = asks;
+};
 
 onMounted(() => {
-  orderBookInterval = setIntervalAsync(fetchOrderBookPooling, 500);
+  // Remove any existing listeners first
+  $socket.off('orderbook:update');
+  $socket.off('orderbook:subscribed');
+  
+  // Set up socket listeners
+  $socket.on('orderbook:update', (data) => {
+    if (data.symbol === currentSymbol.value && data.exchange === currentExchange.value) {
+      processOrderBook(data.orderBook);
+      isStreaming.value = data.streaming;
+    }
+  });
+  
+  $socket.on('orderbook:subscribed', (data) => {
+    console.log('[OrderBook] Subscribed to:', data.subscriptionKey);
+  });
+  
+  // Subscribe to initial order book with a small delay to ensure socket is ready
+  nextTick(() => {
+    subscribeOrderBook();
+  });
 });
 
 onUnmounted(() => {
-  clearIntervalAsync(orderBookInterval);
+  // Clean up
+  unsubscribeOrderBook();
+  $socket.off('orderbook:update');
+  $socket.off('orderbook:subscribed');
 });
 
-async function fetchOrderBookPooling() {
-  let bids = [];
-  let asks = [];
-
-  let orderBook = await $fetch('/api/v1/fetchOrderBook', {
-    query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
-      symbol:currentSymbol.value,
+// Watch for exchange/symbol changes
+watch([currentExchange, currentSymbol], ([newExchange, newSymbol], [oldExchange, oldSymbol]) => {
+  if (oldExchange !== newExchange || oldSymbol !== newSymbol) {
+    // Unsubscribe from old
+    if (oldExchange && oldSymbol) {
+      $socket.emit('orderbook:unsubscribe', {
+        exchange: oldExchange,
+        symbol: oldSymbol
+      });
     }
-  });
-
-  if (orderBook.data) {
-    for (let i = 0; i < orderBook.data.bids.length; i++) {
-      bids.push({
-        price: orderBook.data.bids[i][0],
-        quantity: orderBook.data.bids[i][1],
-        total: (orderBook.data.bids[i][1] * orderBook.data.bids[i][0]).toFixed(2),
-      })
+    
+    // Subscribe to new
+    if (newExchange && newSymbol) {
+      subscribeOrderBook();
     }
-    bidsData.value = bids;
-
-    for (let i = 0; i < orderBook.data.asks.length; i++) {
-      asks.push({
-        price: orderBook.data.asks[i][0],
-        quantity: orderBook.data.asks[i][1],
-        total: (orderBook.data.asks[i][1] * orderBook.data.asks[i][0]).toFixed(2),
-      })
-    }
-    asksData.value = asks;
   }
-}
+});
 
+// Update references when store changes
+watch(() => app.getUserSelectedExchange, (newVal) => {
+  currentExchange.value = newVal;
+});
 
+watch(() => app.getUserSelectedMarket, (newVal) => {
+  currentSymbol.value = newVal;
+});
 </script>
 
 <template>
   <n-card>
+    <template #header>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>Order Book</span>
+        <n-tag v-if="isStreaming" type="success" size="tiny">LIVE</n-tag>
+      </div>
+    </template>
     <n-space vertical :size="12">
       <div class="asks box">
         <div class="row" v-for="row in asksData">

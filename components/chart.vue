@@ -7,8 +7,7 @@ const app = useAppStore()
 
 let userID = useCookie('userID');
 
-// import {createChart, LineStyle} from "lightweight-charts";
-import {clearIntervalAsync, setIntervalAsync} from "set-interval-async";
+// WebSocket implementation - no longer using setIntervalAsync
 
 // Inject theme from app.vue
 const isDark = inject('isDark');
@@ -50,9 +49,7 @@ let chartTimeframes = app.getAvailableTimeframes;
 
 let selectedTimeframe = ref(['1m']);
 
-let ohlcvInterval = null;
-
-let timeframeData = null;
+let isSocketConnected = ref(false);
 let lastBarTime = null;
 
 // Theme colors function
@@ -104,7 +101,7 @@ const updateChartTheme = () => {
 };
 
 onMounted(async () => {
-  const { $lightweightCharts } = useNuxtApp()
+  const { $lightweightCharts, $socket } = useNuxtApp()
   const colors = getChartColors();
 
   //init chart lib
@@ -291,35 +288,98 @@ onMounted(async () => {
     },
   });
 
-  //load OHLCV historical data
-  let data = await fetchOHLCVRecentData(selectedTimeframe.value[0]);
+  // Remove any existing listeners first
+  $socket.off('chart:data');
+  $socket.off('chart:update');
+  $socket.off('chart:error');
+  $socket.off('chart:subscribed');
+  
+  // Set up socket listeners for chart data
+  $socket.on('chart:data', (response) => {
+    console.log('[Chart] Received initial data:', response.candles?.length, 'candles');
+    const data = formatCandlesData(response.candles, false);
+    
+    //set data to chart
+    chartCandlesSeries.setData(data.candles);
+    chartVolumeSeries.setData(data.volume);
+    chartMA12Series.setData(data.MA12);
+    chartMA21Series.setData(data.MA21);
+    chartMA50Series.setData(data.MA50);
+    chartMA100Series.setData(data.MA100);
+    chartMA200Series.setData(data.MA200);
+    chartRSISeries.setData(data.RSI);
+    chartMACDSeries.setData(data.MACD);
+    chartMACDSignalSeries.setData(data.MACDSignal);
+    chartMACDHistogramSeries.setData(data.MACDHistogram);
+    chartBBLowerSeries.setData(data.BBLower);
+    chartBBMiddleSeries.setData(data.BBMiddle);
+    chartBBUpperSeries.setData(data.BBUpper);
 
-  // console.log(data);
+    let markers = checkForCrossOvers(data);
+    chartCandlesSeries.setMarkers(markers);
 
-  //set data to chart
-  chartCandlesSeries.setData(data.candles);
-  chartVolumeSeries.setData(data.volume);
-  chartMA12Series.setData(data.MA12);
-  chartMA21Series.setData(data.MA21);
-  chartMA50Series.setData(data.MA50);
-  chartMA100Series.setData(data.MA100);
-  chartMA200Series.setData(data.MA200);
-  chartRSISeries.setData(data.RSI);
-  chartMACDSeries.setData(data.MACD);
-  chartMACDSignalSeries.setData(data.MACDSignal);
-  chartMACDHistogramSeries.setData(data.MACDHistogram);
-  chartBBLowerSeries.setData(data.BBLower);
-  chartBBMiddleSeries.setData(data.BBMiddle);
-  chartBBUpperSeries.setData(data.BBUpper);
+    //set last bar tracker
+    if (data.candles.length) {
+      lastBarTime = data.candles[data.candles.length - 1].time;
+    }
+  });
 
-  let markers = checkForCrossOvers(data);
-  chartCandlesSeries.setMarkers(markers);
+  $socket.on('chart:update', (response) => {
+    const { candle } = response;
+    if (!candle) return;
 
+    let live = true;
+    if (lastBarTime < candle.time) {
+      lastBarTime = candle.time;
+      live = false;
+    }
 
-  //set last bar tracker
-  if (data.candles.length) {
-    lastBarTime = data.candles[data.candles.length - 1].time;
-  }
+    const formattedData = formatCandlesData([candle], live);
+    
+    chartCandlesSeries.update(formattedData.candles[formattedData.candles.length - 1]);
+    chartVolumeSeries.update(formattedData.volume[formattedData.volume.length - 1]);
+    if (formattedData.MA12.length) chartMA12Series.update(formattedData.MA12[formattedData.MA12.length - 1]);
+    if (formattedData.MA21.length) chartMA21Series.update(formattedData.MA21[formattedData.MA21.length - 1]);
+    if (formattedData.MA50.length) chartMA50Series.update(formattedData.MA50[formattedData.MA50.length - 1]);
+    if (formattedData.MA100.length) chartMA100Series.update(formattedData.MA100[formattedData.MA100.length - 1]);
+    if (formattedData.MA200.length) chartMA200Series.update(formattedData.MA200[formattedData.MA200.length - 1]);
+    if (formattedData.RSI.length) chartRSISeries.update(formattedData.RSI[formattedData.RSI.length - 1]);
+    if (formattedData.MACD.length) chartMACDSeries.update(formattedData.MACD[formattedData.MACD.length - 1]);
+    if (formattedData.MACDSignal.length) chartMACDSignalSeries.update(formattedData.MACDSignal[formattedData.MACDSignal.length - 1]);
+    if (formattedData.MACDHistogram.length) chartMACDHistogramSeries.update(formattedData.MACDHistogram[formattedData.MACDHistogram.length - 1]);
+    if (formattedData.BBLower.length) chartBBLowerSeries.update(formattedData.BBLower[formattedData.BBLower.length - 1]);
+    if (formattedData.BBMiddle.length) chartBBMiddleSeries.update(formattedData.BBMiddle[formattedData.BBMiddle.length - 1]);
+    if (formattedData.BBUpper.length) chartBBUpperSeries.update(formattedData.BBUpper[formattedData.BBUpper.length - 1]);
+  });
+
+  $socket.on('chart:error', (error) => {
+    console.error('[Chart] Socket error:', error);
+  });
+
+  $socket.on('chart:subscribed', (data) => {
+    console.log('[Chart] Subscribed to:', data.subscriptionKey);
+    isSocketConnected.value = true;
+  });
+
+  // Use nextTick to ensure socket is ready
+  nextTick(() => {
+    // Request initial data via socket
+    $socket.emit('chart:load', {
+      userID: userID.value,
+      exchange: currentExchange.value,
+      symbol: currentSymbol.value,
+      timeframe: selectedTimeframe.value[0],
+      limit: 1000
+    });
+
+    // Subscribe to live updates
+    $socket.emit('chart:subscribe', {
+      userID: userID.value,
+      exchange: currentExchange.value,
+      symbol: currentSymbol.value,
+      timeframe: selectedTimeframe.value[0]
+    });
+  });
 
   const chartDiv = document.getElementById('chart');
 
@@ -335,9 +395,6 @@ onMounted(async () => {
       height: chartDiv.offsetHeight
     });
   }
-
-  //load OHLCV pooling
-  ohlcvInterval = setIntervalAsync(fetchOHLCVLivePricePooling, 500);
   
   // Watch for theme changes
   watch(isDark, () => {
@@ -348,82 +405,23 @@ onMounted(async () => {
 
 
 onUnmounted(() => {
-  clearIntervalAsync(ohlcvInterval);
+  const { $socket } = useNuxtApp();
+  
+  // Unsubscribe from socket events
+  $socket.emit('chart:unsubscribe', {
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value,
+    timeframe: selectedTimeframe.value[0]
+  });
+  
+  // Remove listeners
+  $socket.off('chart:data');
+  $socket.off('chart:update');
+  $socket.off('chart:error');
+  $socket.off('chart:subscribed');
 });
 
-async function fetchOHLCVRecentData(timeframe) {
-
-  timeframeData = await $fetch('/api/v1/fetchTimeframeDuration', {
-    query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
-      timeframe:timeframe,
-    }
-  });
-
-
-  // const oneWeekFromNow = currentTimestamp - 7 * 24 * 60 * 60 * 1000;
-  // const fiveMinutesFromNow = currentDate.getTime() - 60 * 1000;
-  // console.log(currentTimestamp, fiveMinutesFromNow);
-
-  const currentDate = new Date();
-  const currentTimestamp = currentDate.getTime();
-  const last100Bars = currentTimestamp - ((timeframeData * 1000) * 1000);
-
-  let candlesData = await $fetch('/api/v1/fetchOHLCV', {
-    query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
-      symbol:currentSymbol.value,
-      timeframe:timeframe,
-      dateFrom:last100Bars,
-      limit:1000,
-    }
-  });
-
-  return formatCandlesData(candlesData, false);
-}
-async function fetchOHLCVLivePricePooling() {
-
-  // console.log(`pooling ${selectedTimeframe.value[0]}`)
-
-  let candlesData = await $fetch('/api/v1/fetchOHLCVLivePrice', {
-    query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
-      symbol:currentSymbol.value,
-      timeframe:selectedTimeframe.value[0],
-    }
-  });
-
-  if (candlesData.length) {
-
-    let live = true;
-    if (lastBarTime < candlesData[candlesData.length - 1].time) {
-      lastBarTime = candlesData[candlesData.length - 1].time;
-      live = false;
-    } else {
-      live = true;
-    }
-
-    let formattedData = formatCandlesData(candlesData, live);
-
-    chartCandlesSeries.update(formattedData.candles[formattedData.candles.length - 1]);
-    chartVolumeSeries.update(formattedData.volume[formattedData.volume.length - 1]);
-    chartMA12Series.update(formattedData.MA12[formattedData.MA12.length - 1]);
-    chartMA21Series.update(formattedData.MA21[formattedData.MA21.length - 1]);
-    chartMA50Series.update(formattedData.MA50[formattedData.MA50.length - 1]);
-    chartMA100Series.update(formattedData.MA100[formattedData.MA100.length - 1]);
-    chartMA200Series.update(formattedData.MA200[formattedData.MA200.length - 1]);
-    chartRSISeries.update(formattedData.RSI[formattedData.RSI.length - 1]);
-    chartMACDSeries.update(formattedData.MACD[formattedData.MACD.length - 1]);
-    chartMACDSignalSeries.update(formattedData.MACDSignal[formattedData.MACDSignal.length - 1]);
-    chartMACDHistogramSeries.update(formattedData.MACDHistogram[formattedData.MACDHistogram.length - 1]);
-    chartBBLowerSeries.update(formattedData.BBLower[formattedData.BBLower.length - 1]);
-    chartBBMiddleSeries.update(formattedData.BBMiddle[formattedData.BBMiddle.length - 1]);
-    chartBBUpperSeries.update(formattedData.BBUpper[formattedData.BBUpper.length - 1]);
-  }
-}
+// Removed HTTP fetch functions - now using WebSocket only
 
 async function updateAvailableIndicators(indicator) {
   // selectedTimeframe.value = [timeframe];
@@ -508,44 +506,43 @@ async function updateAvailableIndicators(indicator) {
 }
 
 async function updateCurrentTimeframe(timeframe) {
+  const { $socket } = useNuxtApp();
+  
+  // Unsubscribe from old timeframe
+  $socket.emit('chart:unsubscribe', {
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value,
+    timeframe: selectedTimeframe.value[0]
+  });
+  
   selectedTimeframe.value = [timeframe];
 
-  // console.log(timeframe);
+  // Reset indicators
+  SMA12Indicator = new SMA(12);
+  SMA21Indicator = new SMA(21);
+  SMA50Indicator = new SMA(50);
+  SMA100Indicator = new SMA(100);
+  SMA200Indicator = new SMA(200);
+  RSIIndicator = new RSI(14);
+  MACDIndicator = new MACD(12, 26, 9);
+  BBIndicator = new BollingerBands(20, 2);
 
-  //stop live pooling
-  clearIntervalAsync(ohlcvInterval);
+  // Request new data via socket
+  $socket.emit('chart:load', {
+    userID: userID.value,
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value,
+    timeframe: timeframe,
+    limit: 1000
+  });
 
-  //reset indicators?
-  // SMA12Indicator = new SMA(12);
-  // SMA21Indicator = new SMA(21);
-  // SMA50Indicator = new SMA(50);
-  // SMA100Indicator = new SMA(100);
-  // SMA200Indicator = new SMA(200);
-  // RSIIndicator = new RSI(14);
-  // MACDIndicator = new MACD(12, 26, 9);
-  // BBIndicator = new BollingerBands(20, 2);
-
-  //load OHLCV historical data
-  let data = await fetchOHLCVRecentData(timeframe);
-
-  //set data to chart
-  chartCandlesSeries.setData(data.candles);
-  chartVolumeSeries.setData(data.volume);
-  chartMA12Series.setData(data.MA12);
-  chartMA21Series.setData(data.MA21);
-  chartMA50Series.setData(data.MA50);
-  chartMA100Series.setData(data.MA100);
-  chartMA200Series.setData(data.MA200);
-  chartRSISeries.setData(data.RSI);
-  chartMACDSeries.setData(data.MACD);
-  chartMACDSignalSeries.setData(data.MACDSignal);
-  chartMACDHistogramSeries.setData(data.MACDHistogram);
-  chartBBLowerSeries.setData(data.BBLower);
-  chartBBMiddleSeries.setData(data.BBMiddle);
-  chartBBUpperSeries.setData(data.BBUpper);
-
-  //start live pooling
-  ohlcvInterval = setIntervalAsync(fetchOHLCVLivePricePooling, 500);
+  // Subscribe to new timeframe
+  $socket.emit('chart:subscribe', {
+    userID: userID.value,
+    exchange: currentExchange.value,
+    symbol: currentSymbol.value,
+    timeframe: timeframe
+  });
 }
 
 
