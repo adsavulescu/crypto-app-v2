@@ -5,6 +5,10 @@
       <h1 class="dashboard-title">
         <n-icon :component="DashboardIcon" size="28" />
         Portfolio Dashboard
+        <span v-if="isBackgroundRefreshing" style="margin-left: 12px; font-size: 14px; font-weight: normal; color: var(--n-text-color-3);">
+          <n-icon :component="RefreshIcon" :depth="3" size="16" style="animation: spin 1s linear infinite;" />
+          Updating...
+        </span>
       </h1>
       <div class="header-actions">
         <n-button @click="refreshData" :loading="isRefreshing" type="primary" ghost>
@@ -199,16 +203,19 @@ import PieChart from '~/components/charts/PieChart.vue'
 import LineChart from '~/components/charts/LineChart.vue'
 
 definePageMeta({
-  middleware: 'auth'
+  middleware: 'auth',
+  ssr: false  // Disable SSR for dashboard - it's all dynamic data anyway
 })
 
 const message = useMessage()
-const isLoading = ref(true)
+const isLoading = ref(false) // Start with NO SPINNER - we'll show cached data instantly
 const isRefreshing = ref(false)
+const isBackgroundRefreshing = ref(false)
 const error = ref(null)
 const exchanges = ref([])
 const selectedPeriod = ref('24h')
 const autoRefreshInterval = ref(null)
+const snapshotInterval = ref(null)
 
 // Computed values
 const totalPortfolioValue = computed(() => {
@@ -430,48 +437,56 @@ const loadDashboardData = async () => {
     isLoading.value = true
     error.value = null
     
-    // Fetch LIVE balance data from all exchanges
-    const response = await $fetch('/api/v1/fetchLiveBalance')
+    // FIRST: Load from local database cache for INSTANT display
+    const cacheResponse = await $fetch('/api/v1/fetchDatabaseBalance')
     
-    if (!response?.success) {
-      throw new Error('Failed to fetch live balance data')
-    }
-    
-    if (response.exchanges) {
-      // Multiple exchanges returned
-      exchanges.value = response.exchanges
-        .filter(ex => !ex.error) // Filter out errored exchanges
+    // Process cached data if available
+    if (cacheResponse?.success && cacheResponse.exchanges) {
+      exchanges.value = cacheResponse.exchanges
+        .filter(ex => !ex.noData)
         .map(ex => ({
           name: ex.exchange,
           lastBalance: ex.balance || [],
           totalUSD: ex.totalUSD || 0,
           chartData: formatChartData(ex.balance || []),
-          timestamp: ex.timestamp
+          timestamp: ex.timestamp,
+          isStale: ex.isStale
         }))
-    } else if (response.balance) {
-      // Single exchange returned
-      exchanges.value = [{
-        name: response.exchange,
-        lastBalance: response.balance || [],
-        totalUSD: response.totalUSD || 0,
-        chartData: formatChartData(response.balance || []),
-        timestamp: response.timestamp
-      }]
-    } else {
-      exchanges.value = []
+      
+      // IMMEDIATELY show the cached data - no more spinner!
+      isLoading.value = false
     }
     
-    // Load historical data for charts
-    await loadHistoricalData()
+    // THEN: Fetch live data in the background to update
+    isBackgroundRefreshing.value = true
+    $fetch('/api/v1/fetchLiveBalance')
+      .then(response => {
+        if (response?.success && response.exchanges) {
+          exchanges.value = response.exchanges
+            .filter(ex => !ex.error)
+            .map(ex => ({
+              name: ex.exchange,
+              lastBalance: ex.balance || [],
+              totalUSD: ex.totalUSD || 0,
+              chartData: formatChartData(ex.balance || []),
+              timestamp: ex.timestamp,
+              isStale: false
+            }))
+          message.success('Portfolio data updated')
+        }
+      })
+      .catch(err => {})
+      .finally(() => {
+        isBackgroundRefreshing.value = false
+      })
     
-    // Load asset performance data
-    await loadPerformanceData()
+    // Load these in background too
+    loadHistoricalData().catch(err => {})
+    loadPerformanceData().catch(err => {})
     
   } catch (err) {
-    console.error('Dashboard error:', err)
     error.value = err.message || 'Failed to load dashboard data'
     message.error('Failed to load dashboard data')
-  } finally {
     isLoading.value = false
   }
 }
@@ -493,7 +508,7 @@ const loadHistoricalData = async () => {
       allBalance: historicalData[index]
     }))
   } catch (err) {
-    console.error('Error loading historical data:', err)
+    // Silently fail
   }
 }
 
@@ -504,7 +519,6 @@ const loadPerformanceData = async () => {
       performanceData.value = response
     }
   } catch (err) {
-    console.error('Error loading performance data:', err)
     // Don't show error to user, just use null values
   }
 }
@@ -532,6 +546,30 @@ const formatNumber = (num, decimals = 2) => {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   })
+}
+
+const fetchLiveDataInBackground = () => {
+  isBackgroundRefreshing.value = true
+  $fetch('/api/v1/fetchLiveBalance')
+    .then(response => {
+      if (response?.success && response.exchanges) {
+        exchanges.value = response.exchanges
+          .filter(ex => !ex.error)
+          .map(ex => ({
+            name: ex.exchange,
+            lastBalance: ex.balance || [],
+            totalUSD: ex.totalUSD || 0,
+            chartData: formatChartData(ex.balance || []),
+            timestamp: ex.timestamp,
+            isStale: false
+          }))
+        message.success('Portfolio data updated')
+      }
+    })
+    .catch(err => {})
+    .finally(() => {
+      isBackgroundRefreshing.value = false
+    })
 }
 
 const refreshData = async () => {
@@ -624,6 +662,7 @@ const startAutoRefresh = () => {
   autoRefreshInterval.value = setInterval(async () => {
     try {
       // Silently fetch new data without showing loading state
+      // fetchLiveBalance now NEVER saves to database
       const response = await $fetch('/api/v1/fetchLiveBalance')
       
       if (response?.success && response.exchanges) {
@@ -643,7 +682,6 @@ const startAutoRefresh = () => {
       }
     } catch (err) {
       // Silently fail - don't show errors for background refresh
-      console.error('Background refresh error:', err)
     }
   }, 30000)
 }
@@ -655,17 +693,72 @@ const stopAutoRefresh = () => {
   }
 }
 
-onMounted(() => {
-  loadDashboardData()
+// Start loading data immediately on component creation
+// Don't show spinner - we'll have data from cache almost instantly
+$fetch('/api/v1/fetchDatabaseBalance')
+  .then(cacheResponse => {
+    if (cacheResponse?.success && cacheResponse.exchanges) {
+      exchanges.value = cacheResponse.exchanges
+        .filter(ex => !ex.noData)
+        .map(ex => ({
+          name: ex.exchange,
+          lastBalance: ex.balance || [],
+          totalUSD: ex.totalUSD || 0,
+          chartData: formatChartData(ex.balance || []),
+          timestamp: ex.timestamp,
+          isStale: ex.isStale
+        }))
+    }
+    // Fetch live data in background
+    fetchLiveDataInBackground()
+  })
+  .catch(err => {
+    isLoading.value = true // Show spinner only if cache fails
+    loadDashboardData() // Fallback to full load
+  })
+
+onMounted(async () => {
+  // Clear any existing intervals (in case of hot reload or re-mount)
+  if (autoRefreshInterval.value) {
+    clearInterval(autoRefreshInterval.value)
+  }
+  if (snapshotInterval.value) {
+    clearInterval(snapshotInterval.value)
+  }
+  
+  // Start auto-refresh
   startAutoRefresh()
+  
+  // Store snapshots every 30 minutes (separate from data refresh)
+  // First snapshot will happen after 30 minutes to avoid redundant saves
+  snapshotInterval.value = setInterval(async () => {
+    try {
+      await $fetch('/api/v1/storeDatabaseBalance', { method: 'POST' })
+    } catch (err) {
+      // Silently fail
+    }
+  }, 30 * 60 * 1000) // Every 30 minutes
 })
 
 onUnmounted(() => {
   stopAutoRefresh()
+  if (snapshotInterval.value) {
+    clearInterval(snapshotInterval.value)
+    snapshotInterval.value = null
+  }
 })
 </script>
 
 <style scoped>
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .dashboard-container {
   padding: 24px;
   max-width: 1400px;
