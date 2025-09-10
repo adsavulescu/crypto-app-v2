@@ -64,8 +64,9 @@ The DCAEngine executes strategies by polling their signals and managing order pl
 ### DCA Bot Smart Features
 
 #### Auto Direction Detection (direction = "auto")
-- Analyzes 100 1-minute candles to determine market trend
-- Uses composite scoring system with 5 indicators:
+- Analyzes 100 1-hour candles (~4 days) to determine market trend
+- Uses composite scoring system with 6 indicators:
+  - MA Analysis (SMA 20/50/100/200): ±3 points for trend strength
   - EMA alignment (9/21/50 periods): ±2 points
   - RSI oversold/overbought: ±1 point
   - MACD histogram momentum: ±1 point
@@ -75,12 +76,23 @@ The DCAEngine executes strategies by polling their signals and managing order pl
 - Detects direction once per deal, stored in `activeDeal.detectedDirection`
 
 #### Smart Entry Detection (dealStartCondition = "smartStart")
-- Analyzes 50 1-minute candles for optimal entry timing
+- Analyzes 100 30-minute candles (~2 days) for optimal entry timing
 - Runs every second until conditions are met
-- For LONG: Waits for pullback to EMA support, RSI recovery, avoiding tops
-- For SHORT: Waits for rally to EMA resistance, RSI decline, avoiding bottoms
-- Penalty system prevents FOMO entries at extremes
-- Requires score of 4+ points to enter (stricter than direction detection)
+- Primary signals (high weight):
+  - MA bounce detection (20/50/100/200 periods): +3 points
+  - Support/Resistance level bounces: +2 points
+  - Bollinger Band bounces: +2 points
+- Confirmation indicators:
+  - MACD momentum turning: +1 point
+  - RSI recovery/rejection: +1 point
+  - ATR confirms meaningful move (>0.5x ATR): +1 point
+  - Volume spike on bounce/rejection: +1 point
+- Penalties:
+  - RSI extreme (>70 or <30): -2 points
+  - At opposite Bollinger Band: -1 point
+  - No recent pullback/rally: -1 point
+- Requires score ≥4 points to enter (balanced for DCA strategy)
+- All bounce signals require actual pullback/rally (not just proximity)
 - Tracks waiting time and shows status in UI
 
 ### Authentication Flow
