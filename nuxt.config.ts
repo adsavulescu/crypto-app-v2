@@ -2,6 +2,8 @@
 // @ts-ignore
 export default defineNuxtConfig({
   // ssr:false,
+  css: ['~/assets/css/main.css'],
+  
   modules: [
     '@nuxt/devtools',
     '@pinia/nuxt',

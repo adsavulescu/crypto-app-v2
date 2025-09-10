@@ -14,22 +14,47 @@
 import { ref, computed, watch } from 'vue';
 import { darkTheme, lightTheme } from "naive-ui";
 
-// Check for saved theme preference or default to dark
-const isDark = ref(true);
+// Get initial theme from cookie or localStorage
+const getInitialTheme = () => {
+  // Try cookie first (SSR compatible)
+  const themeCookie = useCookie('theme', {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: false
+  });
+  
+  if (themeCookie.value) {
+    return themeCookie.value !== 'light';
+  }
+  
+  // Fallback to localStorage if available
+  if (process.client) {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      return savedTheme !== 'light';
+    }
+  }
+  
+  return true; // Default to dark
+};
 
-// Initialize from localStorage if available
-if (process.client) {
-  const savedTheme = localStorage.getItem('theme');
-  isDark.value = savedTheme !== 'light';
-}
+// Initialize theme
+const isDark = ref(getInitialTheme());
 
 // Compute the theme based on isDark
 const theme = computed(() => isDark.value ? darkTheme : null);
 
-// Watch for theme changes and save to localStorage
+// Watch for theme changes and save to both cookie and localStorage
 watch(isDark, (newValue) => {
+  const themeValue = newValue ? 'dark' : 'light';
+  
+  // Save to cookie (SSR compatible)
+  const themeCookie = useCookie('theme');
+  themeCookie.value = themeValue;
+  
+  // Also save to localStorage for redundancy
   if (process.client) {
-    localStorage.setItem('theme', newValue ? 'dark' : 'light');
+    localStorage.setItem('theme', themeValue);
   }
 });
 
@@ -41,31 +66,5 @@ provide('toggleTheme', () => {
 </script>
 
 <style>
-
-.header {
-  text-align:center;
-  display:flex;
-  align-items: center;
-  padding:20px;
-
-  .inner {
-    width:100%;
-  }
-}
-
-.container {
-  height: calc(100vh - 118px);
-}
-
-.content {
-  padding: 10px 20px;
-}
-
-.footer {
-  padding:10px;
-  text-align:center;
-  display:flex;
-  align-items: center;
-  justify-content: center
-}
+/* Global app styles */
 </style>

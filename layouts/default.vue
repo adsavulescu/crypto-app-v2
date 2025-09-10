@@ -1,64 +1,60 @@
 <template>
-    <n-space vertical>
-        <n-layout>
-            <n-layout-header bordered class="header">
-                <n-space justify="space-between" align="center" class="inner">
-                    <nuxt-link to="/dashboard"><n-text><b>Crypto App</b></n-text></nuxt-link>
-                    <n-text>userID: {{userID}}</n-text>
-                    <n-space align="center" :size="12">
-                        <n-button 
-                            circle 
-                            quaternary
-                            @click="toggleTheme"
-                            :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-                        >
-                            <template #icon>
-                                <n-icon :size="20">
-                                    <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-                                    </svg>
-                                </n-icon>
-                            </template>
-                        </n-button>
-                        <n-dropdown :options="dropdownOptions">
-                            <n-button>User profile</n-button>
-                        </n-dropdown>
-                    </n-space>
-                </n-space>
-            </n-layout-header>
-            <n-layout has-sider class="container">
-                <n-layout-sider
-                    bordered
-                    show-trigger
-                    collapse-mode="width"
-                    :collapsed-width="64"
-                    :width="200"
-                    :native-scrollbar="false"
-                    class="sidebar"
-                >
-                    <n-menu
-                        :collapsed-width="64"
-                        :collapsed-icon-size="22"
-                        :options="sidebarOptions"
-                    />
-                </n-layout-sider>
-                <n-layout class="content">
-                    <slot></slot>
-                </n-layout>
-            </n-layout>
-            <n-layout-footer bordered class="footer">
-                Crypto App - 2023
-            </n-layout-footer>
-        </n-layout>
-    </n-space>
+  <n-layout style="height: 100vh" position="absolute">
+    <n-layout-header bordered class="header">
+      <n-space justify="space-between" align="center" class="inner">
+        <n-space align="center" :size="24">
+          <n-space align="center" :size="12">
+            <nuxt-link to="/">
+              <LogoBadge :size="40" />
+            </nuxt-link>
+            <n-text strong style="font-size: 1.1rem;">MicroTrade</n-text>
+          </n-space>
+          <n-space align="center" :size="20">
+            <nuxt-link to="/" class="nav-link">
+              <n-text>Home</n-text>
+            </nuxt-link>
+            <nuxt-link to="/dashboard" class="nav-link">
+              <n-text>Dashboard</n-text>
+            </nuxt-link>
+          </n-space>
+        </n-space>
+        <n-space align="center" :size="16">
+          <n-text>userID: {{userID}}</n-text>
+          <n-dropdown :options="dropdownOptions" @select="handleDropdownSelect">
+            <n-button>User profile</n-button>
+          </n-dropdown>
+        </n-space>
+      </n-space>
+    </n-layout-header>
+    <n-layout has-sider position="absolute" style="top: 64px; bottom: 0">
+      <n-layout-sider
+        bordered
+        show-trigger
+        collapse-mode="width"
+        :collapsed-width="64"
+        :width="200"
+        :native-scrollbar="false"
+        position="absolute"
+      >
+        <n-menu
+          :collapsed-width="64"
+          :collapsed-icon-size="22"
+          :options="sidebarOptions"
+        />
+      </n-layout-sider>
+      <n-layout-content position="absolute" :native-scrollbar="false" class="content-wrapper">
+        <div class="content">
+          <slot></slot>
+        </div>
+        <AppFooter />
+      </n-layout-content>
+    </n-layout>
+  </n-layout>
 </template>
 
 <script setup>
 import NuxtLink from "#app/components/nuxt-link";
-import { h, inject } from "vue";
+import { h, inject, computed } from "vue";
 import { NIcon, NButton, NSpace } from "naive-ui";
 import {
     AppsSharp as AppsSharp,
@@ -68,7 +64,9 @@ import {
     GitCompareOutline as GitCompareOutline,
     BookOutline as BookIcon,
     PersonCircleOutline as UserIcon,
-    LogOutOutline as LogoutIcon
+    LogOutOutline as LogoutIcon,
+    SunnyOutline as SunIcon,
+    MoonOutline as MoonIcon
 } from "@vicons/ionicons5";
 let userIDCookie = useCookie('userID');
 let userID = userIDCookie.value;
@@ -88,13 +86,27 @@ const sidebarOptions = [
                 NuxtLink,
                 {
                     to: {
+                        name: 'index',
+                    }
+                },
+                { default: () => 'Home' }
+            ),
+        key: 'home',
+        icon: renderIcon(AppsSharp),
+    },
+    {
+        label: () =>
+            h(
+                NuxtLink,
+                {
+                    to: {
                         name: 'dashboard',
                     }
                 },
                 { default: () => 'Dashboard' }
             ),
         key: 'dashboard',
-        icon: renderIcon(AppsSharp),
+        icon: renderIcon(BarChart),
     },
     {
         label: () =>
@@ -108,7 +120,7 @@ const sidebarOptions = [
                 { default: () => 'Trade' }
             ),
         key: 'trade',
-        icon: renderIcon(BarChart),
+        icon: renderIcon(Analytics),
     },
     // {
     //     label: () =>
@@ -183,7 +195,13 @@ const sidebarOptions = [
     },
 ];
 
-const dropdownOptions = [
+const handleDropdownSelect = (key) => {
+    if (key === 'theme-toggle') {
+        toggleTheme();
+    }
+};
+
+const dropdownOptions = computed(() => [
     {
         label: () =>
             h(
@@ -199,6 +217,19 @@ const dropdownOptions = [
         icon: renderIcon(UserIcon)
     },
     {
+        type: 'divider',
+        key: 'd1'
+    },
+    {
+        label: isDark.value ? 'Light Mode' : 'Dark Mode',
+        key: 'theme-toggle',
+        icon: renderIcon(isDark.value ? SunIcon : MoonIcon)
+    },
+    {
+        type: 'divider',
+        key: 'd2'
+    },
+    {
       label: () =>
           h(
               NuxtLink,
@@ -212,9 +243,50 @@ const dropdownOptions = [
         key: 'logout',
         icon: renderIcon(LogoutIcon)
     }
-];
+]);
 
 
 
 </script>
+
+<style scoped>
+.header {
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  z-index: 100;
+}
+
+.inner {
+  width: 100%;
+}
+
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  min-height: calc(100vh - 64px);
+}
+
+.nav-link {
+  text-decoration: none;
+  transition: all 0.3s;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.nav-link:hover {
+  background: rgba(24, 160, 88, 0.1);
+}
+
+.nav-link.router-link-active {
+  background: rgba(24, 160, 88, 0.15);
+  color: #18a058;
+}
+</style>
 
