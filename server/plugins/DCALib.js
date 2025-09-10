@@ -1,4 +1,4 @@
-import {SMA, RSI, CrossUp, CrossDown, EMA, MACD} from 'technicalindicators';
+import {SMA, RSI, CrossUp, CrossDown, EMA, MACD, BollingerBands, ATR} from 'technicalindicators';
 import moment from 'moment';
 import { create, all } from 'mathjs';
 import {dcaBotSchema} from "~/server/models/dcaBot.schema";
@@ -806,15 +806,15 @@ export default defineNitroPlugin((nitroApp) => {
             try {
                 console.log(`Auto direction detection for ${bot.symbol}...`);
                 
-                // Fetch last 100 1-minute candles
+                // Fetch last 100 1-hour candles (100 hours = ~4 days)
                 const now = Date.now();
-                const fromTimestamp = now - (100 * 60 * 1000); // 100 minutes ago
+                const fromTimestamp = now - (100 * 60 * 60 * 1000); // 100 hours ago
                 
                 const candlesResponse = await nitroApp.ccxtw.fetchOHLCV(
                     bot.userID, 
                     bot.exchange, 
                     bot.symbol, 
-                    '1m', 
+                    '1h', 
                     fromTimestamp, 
                     100
                 );
@@ -857,7 +857,50 @@ export default defineNitroPlugin((nitroApp) => {
                     }
                 }
                 
-                // 2. RSI Score (+1/-1 points)
+                // 2. MA Analysis Score (+3/-3 points) - Major trend indicator
+                const sma20 = SMA.calculate({period: 20, values: closes});
+                const sma50 = SMA.calculate({period: 50, values: closes});
+                const sma100 = closes.length >= 100 ? SMA.calculate({period: 100, values: closes}) : [];
+                const sma200 = closes.length >= 200 ? SMA.calculate({period: 200, values: closes}) : [];
+                
+                if (sma20.length > 0 && sma50.length > 0) {
+                    const currentPrice = closes[closes.length - 1];
+                    const lastSma20 = sma20[sma20.length - 1];
+                    const lastSma50 = sma50[sma50.length - 1];
+                    const lastSma100 = sma100.length > 0 ? sma100[sma100.length - 1] : null;
+                    const lastSma200 = sma200.length > 0 ? sma200[sma200.length - 1] : null;
+                    
+                    let maScore = 0;
+                    
+                    // Check price position relative to MAs
+                    if (currentPrice > lastSma20) maScore += 1;
+                    if (currentPrice > lastSma50) maScore += 1;
+                    if (lastSma100 && currentPrice > lastSma100) maScore += 0.5;
+                    if (lastSma200 && currentPrice > lastSma200) maScore += 0.5;
+                    
+                    // Check MA alignment (golden cross/death cross patterns)
+                    if (lastSma20 > lastSma50) maScore += 1;
+                    if (lastSma100 && lastSma50 > lastSma100) maScore += 0.5;
+                    
+                    // Max score is 4.5, midpoint is 2.25
+                    if (maScore >= 3.5) {
+                        score += 3;
+                        console.log(`  MA Analysis: Strong bullish trend (${maScore.toFixed(1)}) (+3)`);
+                    } else if (maScore >= 2.5) {
+                        score += 1;
+                        console.log(`  MA Analysis: Moderate bullish (${maScore.toFixed(1)}) (+1)`);
+                    } else if (maScore >= 2.0) {
+                        console.log(`  MA Analysis: Neutral-bullish (${maScore.toFixed(1)}) (0)`);
+                    } else if (maScore >= 1.0) {
+                        score -= 1;
+                        console.log(`  MA Analysis: Moderate bearish (${maScore.toFixed(1)}) (-1)`);
+                    } else {
+                        score -= 3;
+                        console.log(`  MA Analysis: Strong bearish trend (${maScore.toFixed(1)}) (-3)`);
+                    }
+                }
+                
+                // 3. RSI Score (+1/-1 points)
                 const rsiValues = RSI.calculate({period: 14, values: closes});
                 if (rsiValues.length > 0) {
                     const currentRSI = rsiValues[rsiValues.length - 1];
@@ -873,7 +916,7 @@ export default defineNitroPlugin((nitroApp) => {
                     }
                 }
                 
-                // 3. MACD Histogram Score (+1/-1 points)
+                // 4. MACD Histogram Score (+1/-1 points)
                 const macdResult = MACD.calculate({
                     values: closes,
                     fastPeriod: 12,
@@ -900,18 +943,20 @@ export default defineNitroPlugin((nitroApp) => {
                     }
                 }
                 
-                // 4. Volume Score (+1/0 points)
-                const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-                const currentVolume = volumes[volumes.length - 1];
+                // 5. Volume Score (+1/0 points)
+                const recentVolumes = volumes.slice(-20);
+                const avgVolume = recentVolumes.length > 0 ? 
+                    recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length : 0;
+                const currentVolume = volumes.length > 0 ? volumes[volumes.length - 1] : 0;
                 
-                if (currentVolume > avgVolume * 1.2) {
+                if (avgVolume > 0 && currentVolume > avgVolume * 1.2) {
                     score += 1;
                     console.log('  Volume: Above average (+1)');
                 } else {
                     console.log('  Volume: Normal (0)');
                 }
                 
-                // 5. Candle Pattern Score (+1/-1 points)
+                // 6. Candle Pattern Score (+1/-1 points)
                 // Simple bullish/bearish candle detection
                 const lastCandle = candles[candles.length - 1];
                 const prevCandle = candles[candles.length - 2];
@@ -962,21 +1007,21 @@ export default defineNitroPlugin((nitroApp) => {
                 // Use provided direction or detected direction for auto bots
                 const actualDirection = direction || 
                     (bot.direction === 'auto' && bot.activeDeal?.detectedDirection) || 
-                    bot.direction;
+                    (bot.direction === 'auto' ? 'long' : bot.direction); // Default to long if auto but no detection yet
                 
                 console.log(`Smart entry detection for ${bot.symbol} (${actualDirection})...`);
                 
-                // Fetch last 50 1-minute candles (faster, we need recent data)
+                // Fetch last 100 30-minute candles (50 hours = ~2 days for better context)
                 const now = Date.now();
-                const fromTimestamp = now - (50 * 60 * 1000); // 50 minutes ago
+                const fromTimestamp = now - (100 * 30 * 60 * 1000); // 100 * 30 minutes
                 
                 const candlesResponse = await nitroApp.ccxtw.fetchOHLCV(
                     bot.userID, 
                     bot.exchange, 
                     bot.symbol, 
-                    '1m', 
+                    '30m', 
                     fromTimestamp, 
-                    50
+                    100
                 );
                 
                 if (!candlesResponse.success || !candlesResponse.data || candlesResponse.data.length < 30) {
@@ -991,24 +1036,47 @@ export default defineNitroPlugin((nitroApp) => {
                 const volumes = candles.map(c => c[5]);
                 const currentPrice = closes[closes.length - 1];
                 
-                // Calculate indicators for entry timing
+                // Calculate Moving Averages for bounce detection
+                const sma20 = SMA.calculate({period: 20, values: closes});
+                const sma50 = closes.length >= 50 ? SMA.calculate({period: 50, values: closes}) : [];
+                const sma100 = closes.length >= 100 ? SMA.calculate({period: 100, values: closes}) : [];
+                const sma200 = closes.length >= 200 ? SMA.calculate({period: 200, values: closes}) : [];
+                
+                // Calculate Bollinger Bands
+                const bbResult = BollingerBands.calculate({
+                    period: 20,
+                    values: closes,
+                    stdDev: 2
+                });
+                
+                // Calculate ATR for volatility context
+                const atrValues = ATR.calculate({
+                    high: highs,
+                    low: lows,
+                    close: closes,
+                    period: 14
+                });
+                
+                // Calculate other indicators
                 const ema9 = EMA.calculate({period: 9, values: closes});
                 const ema21 = EMA.calculate({period: 21, values: closes});
                 const rsiValues = RSI.calculate({period: 14, values: closes});
                 
-                if (ema9.length < 2 || ema21.length < 2 || rsiValues.length < 5) {
+                // Check if we have enough data for indicators
+                if (sma20.length < 2 || rsiValues.length < 5 || bbResult.length < 2 || 
+                    atrValues.length < 2 || ema9.length < 2 || ema21.length < 2) {
                     console.log('Not enough indicator data, allowing entry');
                     return true;
                 }
                 
-                const currentEma9 = ema9[ema9.length - 1];
-                const currentEma21 = ema21[ema21.length - 1];
-                const prevEma9 = ema9[ema9.length - 2];
+                const currentEma9 = ema9.length > 0 ? ema9[ema9.length - 1] : currentPrice;
+                const currentEma21 = ema21.length > 0 ? ema21[ema21.length - 1] : currentPrice;
+                const prevEma9 = ema9.length > 1 ? ema9[ema9.length - 2] : currentEma9;
                 
                 const currentRSI = rsiValues[rsiValues.length - 1];
                 const recentRSIs = rsiValues.slice(-5); // Last 5 RSI values
-                const rsiMin = Math.min(...recentRSIs);
-                const rsiMax = Math.max(...recentRSIs);
+                const rsiMin = recentRSIs.length > 0 ? Math.min(...recentRSIs) : currentRSI;
+                const rsiMax = recentRSIs.length > 0 ? Math.max(...recentRSIs) : currentRSI;
                 
                 // Calculate MACD for momentum
                 const macdResult = MACD.calculate({
@@ -1026,156 +1094,248 @@ export default defineNitroPlugin((nitroApp) => {
                     const prevMACD = macdResult[macdResult.length - 2];
                     const prevPrevMACD = macdResult[macdResult.length - 3];
                     
-                    if (actualDirection === 'long') {
-                        // Check if MACD is turning up (was falling, now rising)
-                        macdTurning = prevPrevMACD.histogram > prevMACD.histogram && 
-                                     prevMACD.histogram < lastMACD.histogram;
-                    } else {
-                        // Check if MACD is turning down (was rising, now falling)
-                        macdTurning = prevPrevMACD.histogram < prevMACD.histogram && 
-                                     prevMACD.histogram > lastMACD.histogram;
+                    if (lastMACD.histogram && prevMACD.histogram && prevPrevMACD.histogram) {
+                        if (actualDirection === 'long') {
+                            // Check if MACD is turning up (was falling, now rising)
+                            macdTurning = prevPrevMACD.histogram > prevMACD.histogram && 
+                                         prevMACD.histogram < lastMACD.histogram;
+                        } else {
+                            // Check if MACD is turning down (was rising, now falling)
+                            macdTurning = prevPrevMACD.histogram < prevMACD.histogram && 
+                                         prevMACD.histogram > lastMACD.histogram;
+                        }
                     }
                 }
                 
                 // Volume analysis
-                const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-                const currentVolume = volumes[volumes.length - 1];
-                const volumeSpike = currentVolume > avgVolume * 1.15; // 15% above average
+                const recentVols = volumes.slice(-20);
+                const avgVolume = recentVols.length > 0 ? 
+                    recentVols.reduce((a, b) => a + b, 0) / recentVols.length : 0;
+                const currentVolume = volumes.length > 0 ? volumes[volumes.length - 1] : 0;
+                const volumeSpike = avgVolume > 0 && currentVolume > avgVolume * 1.15; // 15% above average
                 
                 // Price action analysis
                 const priceNearEma9 = Math.abs(currentPrice - currentEma9) / currentPrice < 0.002; // Within 0.2%
                 const priceNearEma21 = Math.abs(currentPrice - currentEma21) / currentPrice < 0.003; // Within 0.3%
                 
+                // Support/Resistance levels detection (24-48hr lookback)
+                const lookbackCandles = Math.min(48, candles.length); // 48 * 30min = 24 hours
+                const recentHighs = highs.slice(-lookbackCandles);
+                const recentLows = lows.slice(-lookbackCandles);
+                
+                // Find significant levels (local highs/lows)
+                const supportLevels = [];
+                const resistanceLevels = [];
+                
+                // Need at least 5 candles to detect local highs/lows
+                if (recentLows.length >= 5) {
+                    for (let i = 2; i < recentLows.length - 2; i++) {
+                    // Local low = potential support
+                    if (recentLows[i] < recentLows[i-1] && recentLows[i] < recentLows[i-2] &&
+                        recentLows[i] < recentLows[i+1] && recentLows[i] < recentLows[i+2]) {
+                        supportLevels.push(recentLows[i]);
+                    }
+                    // Local high = potential resistance
+                    if (recentHighs[i] > recentHighs[i-1] && recentHighs[i] > recentHighs[i-2] &&
+                        recentHighs[i] > recentHighs[i+1] && recentHighs[i] > recentHighs[i+2]) {
+                        resistanceLevels.push(recentHighs[i]);
+                    }
+                    }
+                }
+                
                 // Recent price momentum check (avoid buying after big moves)
-                const recentHigh = Math.max(...closes.slice(-10)); // Last 10 candles
-                const recentLow = Math.min(...closes.slice(-10));
-                const priceRange = (recentHigh - recentLow) / recentLow;
-                const pricePosition = (currentPrice - recentLow) / (recentHigh - recentLow); // 0 = bottom, 1 = top
+                const recentCloses = closes.slice(-10);
+                const recentHigh = recentCloses.length > 0 ? Math.max(...recentCloses) : currentPrice;
+                const recentLow = recentCloses.length > 0 ? Math.min(...recentCloses) : currentPrice;
+                const priceRange = recentLow > 0 ? (recentHigh - recentLow) / recentLow : 0;
+                const pricePosition = (recentHigh - recentLow) > 0 ? 
+                    (currentPrice - recentLow) / (recentHigh - recentLow) : 0.5; // 0 = bottom, 1 = top, 0.5 if flat
                 
                 // Check if price has been pulling back
                 const last3Candles = candles.slice(-3);
                 let pullbackCount = 0;
                 let rallyCount = 0;
-                for (let i = 1; i < last3Candles.length; i++) {
-                    if (last3Candles[i][4] < last3Candles[i-1][4]) pullbackCount++;
-                    if (last3Candles[i][4] > last3Candles[i-1][4]) rallyCount++;
+                if (last3Candles.length >= 2) {
+                    for (let i = 1; i < last3Candles.length; i++) {
+                        if (last3Candles[i][4] < last3Candles[i-1][4]) pullbackCount++;
+                        if (last3Candles[i][4] > last3Candles[i-1][4]) rallyCount++;
+                    }
                 }
                 
                 let entryScore = 0;
                 let reasons = [];
                 let penalties = [];
                 
+                // Helper functions for checking proximity to levels
+                const checkMABounce = () => {
+                    const threshold = 0.01; // 1% proximity
+                    const mas = [
+                        {value: sma20.length > 0 ? sma20[sma20.length - 1] : null, name: 'SMA20'},
+                        {value: sma50.length > 0 ? sma50[sma50.length - 1] : null, name: 'SMA50'},
+                        {value: sma100.length > 0 ? sma100[sma100.length - 1] : null, name: 'SMA100'},
+                        {value: sma200.length > 0 ? sma200[sma200.length - 1] : null, name: 'SMA200'}
+                    ];
+                    
+                    for (const ma of mas) {
+                        if (ma.value && Math.abs(currentPrice - ma.value) / currentPrice < threshold) {
+                            return ma.name;
+                        }
+                    }
+                    return null;
+                };
+                
+                const checkSupportResistance = (direction) => {
+                    const threshold = 0.005; // 0.5% proximity
+                    const levels = direction === 'long' ? supportLevels : resistanceLevels;
+                    
+                    for (const level of levels) {
+                        if (Math.abs(currentPrice - level) / currentPrice < threshold) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                
+                const currentATR = atrValues.length > 0 ? atrValues[atrValues.length - 1] : null;
+                const lastBB = bbResult.length > 0 ? bbResult[bbResult.length - 1] : null;
+                
                 if (actualDirection === 'long') {
                     // LONG entry conditions
                     
                     // PENALTIES - Avoid buying at tops
-                    if (pricePosition > 0.8) {
+                    if (currentRSI > 70) {
                         entryScore -= 2;
-                        penalties.push('Price near recent high');
+                        penalties.push(`RSI extreme overbought (${currentRSI.toFixed(1)})`);
                     }
-                    if (currentRSI > 65) {
+                    if (lastBB && currentPrice > lastBB.upper * 0.98) {
                         entryScore -= 1;
-                        penalties.push(`RSI overbought (${currentRSI.toFixed(1)})`);
+                        penalties.push('At upper Bollinger Band');
                     }
                     if (pullbackCount < 1) {
                         entryScore -= 1;
                         penalties.push('No recent pullback');
                     }
                     
-                    // POSITIVE CONDITIONS
-                    // 1. Price pullback to EMA support (but must be coming from above)
-                    if (priceNearEma9 && currentPrice > prevEma9 && pullbackCount >= 1) {
+                    // PRIMARY SIGNALS (High Weight)
+                    // 1. MA Bounce Detection (+3 points)
+                    const maBounce = checkMABounce();
+                    if (maBounce && pullbackCount >= 1) {
                         entryScore += 3;
-                        reasons.push('Bouncing off EMA9 support');
-                    } else if (priceNearEma21 && currentPrice > currentEma21 && pullbackCount >= 1) {
-                        entryScore += 3;
-                        reasons.push('Bouncing off EMA21 support');
+                        reasons.push(`Bouncing off ${maBounce}`);
                     }
                     
-                    // 2. RSI conditions - must show recovery, not just low
-                    if (rsiMin < 35 && currentRSI > rsiMin + 5 && currentRSI < 55) {
-                        entryScore += 3;
-                        reasons.push(`RSI bouncing from oversold ${rsiMin.toFixed(1)}`);
-                    } else if (currentRSI < 45 && currentRSI > 30 && pricePosition < 0.5) {
-                        entryScore += 1;
-                        reasons.push('RSI in lower range');
-                    }
-                    
-                    // 3. MACD momentum turning positive (stronger signal)
-                    if (macdTurning && pricePosition < 0.7) {
+                    // 2. Support Bounce (+2 points)
+                    if (checkSupportResistance('long') && pullbackCount >= 1) {
                         entryScore += 2;
+                        reasons.push('Bouncing off support level');
+                    }
+                    
+                    // 3. Bollinger Band Bounce (+2 points)
+                    if (lastBB && currentPrice <= lastBB.lower * 1.02 && currentPrice > lastBB.lower && pullbackCount >= 1) {
+                        entryScore += 2;
+                        reasons.push('Bouncing off lower Bollinger Band');
+                    }
+                    
+                    // CONFIRMATION INDICATORS
+                    // 4. MACD turning (+1 point)
+                    if (macdTurning) {
+                        entryScore += 1;
                         reasons.push('MACD turning bullish');
                     }
                     
-                    // 4. Volume confirmation with pullback
-                    if (volumeSpike && currentPrice > candles[candles.length - 2][4] && pullbackCount >= 1) {
-                        entryScore += 2;
-                        reasons.push('Volume spike after pullback');
+                    // 5. RSI recovery (+1 point)
+                    if (rsiMin < 40 && currentRSI > rsiMin + 5 && currentRSI < 60) {
+                        entryScore += 1;
+                        reasons.push(`RSI recovering from ${rsiMin.toFixed(1)}`);
                     }
                     
-                    // 5. Trend confirmation but not extended
-                    if (currentPrice > currentEma9 && currentPrice > currentEma21 && pricePosition < 0.6) {
+                    // 6. ATR confirms meaningful bounce (+1 point)
+                    if (currentATR && pullbackCount >= 1) {
+                        const lastCandle = candles[candles.length - 1];
+                        const prevCandle = candles[candles.length - 2];
+                        const bounceSize = Math.abs(lastCandle[4] - prevCandle[4]);
+                        if (bounceSize > currentATR * 0.5) {
+                            entryScore += 1;
+                            reasons.push('Meaningful bounce (>0.5x ATR)');
+                        }
+                    }
+                    
+                    // 7. Volume increase (+1 point)
+                    if (volumeSpike && candles.length >= 2 && currentPrice > candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Above EMAs but not extended');
+                        reasons.push('Volume spike on bounce');
                     }
                     
                 } else {
                     // SHORT entry conditions
                     
                     // PENALTIES - Avoid shorting at bottoms
-                    if (pricePosition < 0.2) {
+                    if (currentRSI < 30) {
                         entryScore -= 2;
-                        penalties.push('Price near recent low');
+                        penalties.push(`RSI extreme oversold (${currentRSI.toFixed(1)})`);
                     }
-                    if (currentRSI < 35) {
+                    if (lastBB && currentPrice < lastBB.lower * 1.02) {
                         entryScore -= 1;
-                        penalties.push(`RSI oversold (${currentRSI.toFixed(1)})`);
+                        penalties.push('At lower Bollinger Band');
                     }
                     if (rallyCount < 1) {
                         entryScore -= 1;
                         penalties.push('No recent rally');
                     }
                     
-                    // POSITIVE CONDITIONS
-                    // 1. Price rally to EMA resistance (but must be coming from below)
-                    if (priceNearEma9 && currentPrice < prevEma9 && rallyCount >= 1) {
+                    // PRIMARY SIGNALS (High Weight)
+                    // 1. MA Rejection Detection (+3 points)
+                    const maRejection = checkMABounce();
+                    if (maRejection && rallyCount >= 1) {
                         entryScore += 3;
-                        reasons.push('Rejected at EMA9 resistance');
-                    } else if (priceNearEma21 && currentPrice < currentEma21 && rallyCount >= 1) {
-                        entryScore += 3;
-                        reasons.push('Rejected at EMA21 resistance');
+                        reasons.push(`Rejected at ${maRejection}`);
                     }
                     
-                    // 2. RSI conditions - must show weakness, not just high
-                    if (rsiMax > 65 && currentRSI < rsiMax - 5 && currentRSI > 45) {
-                        entryScore += 3;
-                        reasons.push(`RSI falling from overbought ${rsiMax.toFixed(1)}`);
-                    } else if (currentRSI > 55 && currentRSI < 70 && pricePosition > 0.5) {
-                        entryScore += 1;
-                        reasons.push('RSI in upper range');
-                    }
-                    
-                    // 3. MACD momentum turning negative (stronger signal)
-                    if (macdTurning && pricePosition > 0.3) {
+                    // 2. Resistance Rejection (+2 points)
+                    if (checkSupportResistance('short') && rallyCount >= 1) {
                         entryScore += 2;
+                        reasons.push('Rejected at resistance level');
+                    }
+                    
+                    // 3. Bollinger Band Rejection (+2 points)
+                    if (lastBB && currentPrice >= lastBB.upper * 0.98 && currentPrice < lastBB.upper && rallyCount >= 1) {
+                        entryScore += 2;
+                        reasons.push('Rejected at upper Bollinger Band');
+                    }
+                    
+                    // CONFIRMATION INDICATORS
+                    // 4. MACD turning (+1 point)
+                    if (macdTurning) {
+                        entryScore += 1;
                         reasons.push('MACD turning bearish');
                     }
                     
-                    // 4. Volume confirmation with rally
-                    if (volumeSpike && currentPrice < candles[candles.length - 2][4] && rallyCount >= 1) {
-                        entryScore += 2;
-                        reasons.push('Volume spike after rally');
+                    // 5. RSI rejection (+1 point)
+                    if (rsiMax > 60 && currentRSI < rsiMax - 5 && currentRSI > 40) {
+                        entryScore += 1;
+                        reasons.push(`RSI declining from ${rsiMax.toFixed(1)}`);
                     }
                     
-                    // 5. Trend confirmation but not oversold
-                    if (currentPrice < currentEma9 && currentPrice < currentEma21 && pricePosition > 0.4) {
+                    // 6. ATR confirms meaningful rejection (+1 point)
+                    if (currentATR && rallyCount >= 1) {
+                        const lastCandle = candles[candles.length - 1];
+                        const prevCandle = candles[candles.length - 2];
+                        const rejectionSize = Math.abs(prevCandle[4] - lastCandle[4]);
+                        if (rejectionSize > currentATR * 0.5) {
+                            entryScore += 1;
+                            reasons.push('Meaningful rejection (>0.5x ATR)');
+                        }
+                    }
+                    
+                    // 7. Volume increase (+1 point)
+                    if (volumeSpike && candles.length >= 2 && currentPrice < candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Below EMAs but not oversold');
+                        reasons.push('Volume spike on rejection');
                     }
                 }
                 
-                // Decision based on entry score (higher threshold for better entries)
-                const threshold = 4; // Increased from 3 to 4 for stricter entry
+                // Decision based on entry score
+                const threshold = 4; // Score ≥4 for entry (balanced for DCA strategy)
                 const shouldEnter = entryScore >= threshold;
                 
                 console.log(`  Entry Score: ${entryScore}/${threshold}`);

@@ -128,6 +128,9 @@ async function updateSelectedMarket(market) {
   
   // Subscribe to new market
   subscribeTicker();
+  
+  // Reload the page to refresh all components with new market data
+  reloadNuxtApp();
 }
 
 
