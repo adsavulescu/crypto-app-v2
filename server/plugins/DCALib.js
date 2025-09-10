@@ -1193,15 +1193,15 @@ export default defineNitroPlugin((nitroApp) => {
                     // PENALTIES - Avoid buying at tops
                     if (currentRSI > 70) {
                         entryScore -= 2;
-                        penalties.push(`RSI>${currentRSI.toFixed(0)}`);
+                        penalties.push(`RSI overbought (${currentRSI.toFixed(0)})`);
                     }
                     if (lastBB && currentPrice > lastBB.upper * 0.98) {
                         entryScore -= 1;
-                        penalties.push('UpperBB');
+                        penalties.push('At upper BB');
                     }
                     if (pullbackCount < 1) {
                         entryScore -= 1;
-                        penalties.push('NoPullback');
+                        penalties.push('No pullback');
                     }
                     
                     // PRIMARY SIGNALS (High Weight)
@@ -1209,32 +1209,32 @@ export default defineNitroPlugin((nitroApp) => {
                     const maBounce = checkMABounce();
                     if (maBounce && pullbackCount >= 1) {
                         entryScore += 3;
-                        reasons.push(maBounce);
+                        reasons.push(`${maBounce} bounce`);
                     }
                     
                     // 2. Support Bounce (+2 points)
                     if (checkSupportResistance('long') && pullbackCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Support');
+                        reasons.push('Support bounce');
                     }
                     
                     // 3. Bollinger Band Bounce (+2 points)
                     if (lastBB && currentPrice <= lastBB.lower * 1.02 && currentPrice > lastBB.lower && pullbackCount >= 1) {
                         entryScore += 2;
-                        reasons.push('LowerBB');
+                        reasons.push('Lower BB bounce');
                     }
                     
                     // CONFIRMATION INDICATORS
                     // 4. MACD turning (+1 point)
                     if (macdTurning) {
                         entryScore += 1;
-                        reasons.push('MACD+');
+                        reasons.push('MACD turning up');
                     }
                     
                     // 5. RSI recovery (+1 point)
                     if (rsiMin < 40 && currentRSI > rsiMin + 5 && currentRSI < 60) {
                         entryScore += 1;
-                        reasons.push(`RSI>${rsiMin.toFixed(0)}`);
+                        reasons.push(`RSI recovering (${currentRSI.toFixed(0)})`);
                     }
                     
                     // 6. ATR confirms meaningful bounce (+1 point)
@@ -1244,14 +1244,14 @@ export default defineNitroPlugin((nitroApp) => {
                         const bounceSize = Math.abs(lastCandle[4] - prevCandle[4]);
                         if (bounceSize > currentATR * 0.5) {
                             entryScore += 1;
-                            reasons.push('ATR+');
+                            reasons.push('Strong bounce (ATR)');
                         }
                     }
                     
                     // 7. Volume increase (+1 point)
                     if (volumeSpike && candles.length >= 2 && currentPrice > candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Vol+');
+                        reasons.push('Volume spike');
                     }
                     
                 } else {
@@ -1260,15 +1260,15 @@ export default defineNitroPlugin((nitroApp) => {
                     // PENALTIES - Avoid shorting at bottoms
                     if (currentRSI < 30) {
                         entryScore -= 2;
-                        penalties.push(`RSI<${currentRSI.toFixed(0)}`);
+                        penalties.push(`RSI oversold (${currentRSI.toFixed(0)})`);
                     }
                     if (lastBB && currentPrice < lastBB.lower * 1.02) {
                         entryScore -= 1;
-                        penalties.push('LowerBB');
+                        penalties.push('Near lower BB');
                     }
                     if (rallyCount < 1) {
                         entryScore -= 1;
-                        penalties.push('NoRally');
+                        penalties.push('No recent rally');
                     }
                     
                     // PRIMARY SIGNALS (High Weight)
@@ -1276,32 +1276,32 @@ export default defineNitroPlugin((nitroApp) => {
                     const maRejection = checkMABounce();
                     if (maRejection && rallyCount >= 1) {
                         entryScore += 3;
-                        reasons.push(maRejection);
+                        reasons.push(`${maRejection} rejection`);
                     }
                     
                     // 2. Resistance Rejection (+2 points)
                     if (checkSupportResistance('short') && rallyCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Resistance');
+                        reasons.push('Resistance rejection');
                     }
                     
                     // 3. Bollinger Band Rejection (+2 points)
                     if (lastBB && currentPrice >= lastBB.upper * 0.98 && currentPrice < lastBB.upper && rallyCount >= 1) {
                         entryScore += 2;
-                        reasons.push('UpperBB');
+                        reasons.push('Upper BB rejection');
                     }
                     
                     // CONFIRMATION INDICATORS
                     // 4. MACD turning (+1 point)
                     if (macdTurning) {
                         entryScore += 1;
-                        reasons.push('MACD-');
+                        reasons.push('MACD turning down');
                     }
                     
                     // 5. RSI rejection (+1 point)
                     if (rsiMax > 60 && currentRSI < rsiMax - 5 && currentRSI > 40) {
                         entryScore += 1;
-                        reasons.push(`RSI<${rsiMax.toFixed(0)}`);
+                        reasons.push(`RSI rejecting (${currentRSI.toFixed(0)})`);
                     }
                     
                     // 6. ATR confirms meaningful rejection (+1 point)
@@ -1311,14 +1311,14 @@ export default defineNitroPlugin((nitroApp) => {
                         const rejectionSize = Math.abs(prevCandle[4] - lastCandle[4]);
                         if (rejectionSize > currentATR * 0.5) {
                             entryScore += 1;
-                            reasons.push('ATR-');
+                            reasons.push('Strong rejection (ATR)');
                         }
                     }
                     
                     // 7. Volume increase (+1 point)
                     if (volumeSpike && candles.length >= 2 && currentPrice < candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Vol-');
+                        reasons.push('Volume spike');
                     }
                 }
                 
@@ -1326,21 +1326,21 @@ export default defineNitroPlugin((nitroApp) => {
                 const threshold = 4; // Score ≥4 for entry (balanced for DCA strategy)
                 const shouldEnter = entryScore >= threshold;
                 
-                // Build single line log output
+                // Build single line log output with nice formatting
                 let logParts = [];
                 logParts.push(`${this.getCurrentTime()}: ${bot.symbol} - Smart Entry (${actualDirection})`);
                 logParts.push(`Score: ${entryScore}/${threshold}`);
                 
-                if (reasons.length > 0) {
-                    logParts.push(`[${reasons.join(', ')}]`);
-                }
                 if (penalties.length > 0) {
-                    logParts.push(`Penalties: [${penalties.join(', ')}]`);
+                    logParts.push(`⚠️ Penalties: ${penalties.join(', ')}`);
+                }
+                if (reasons.length > 0) {
+                    logParts.push(`✓ Conditions: ${reasons.join(', ')}`);
                 }
                 logParts.push(`Price: ${(pricePosition * 100).toFixed(0)}%`);
-                logParts.push(shouldEnter ? 'ENTER' : 'WAIT');
+                logParts.push(`Decision: ${shouldEnter ? '✅ ENTER NOW' : '⏳ WAIT'}`);
                 
-                console.log(logParts.join(' - '));
+                console.log(logParts.join(' | '));
                 
                 return shouldEnter;
                 
