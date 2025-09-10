@@ -4,8 +4,6 @@ import { useAppStore } from '~/stores/app.store';
 import {clearIntervalAsync, setIntervalAsync} from "set-interval-async";
 const app = useAppStore()
 
-let userID = useCookie('userID');
-
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
 
@@ -40,7 +38,6 @@ onUnmounted(() => {
 async function fetchUserBalancePooling() {
   let response = await $fetch('/api/v1/fetchBalance', {
     query:{
-      userID:userID.value,
       exchange:currentExchange.value,
     }
   });
@@ -72,7 +69,6 @@ function formatTooltip(value) {
 async function createOrder(side, type){
 
   let data = {
-    userID:userID.value,
     exchange: currentExchange.value,
     symbol:currentSymbol.value,
     type:type,

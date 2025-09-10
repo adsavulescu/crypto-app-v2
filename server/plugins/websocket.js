@@ -34,9 +34,9 @@ export default defineNitroPlugin((nitroApp) => {
               
               const interval = setIntervalAsync(async () => {
                 try {
-                  const response = await $fetch('/api/v1/fetchTicker', {
-                    query: { userID, exchange, symbol }
-                  });
+                  // Call ccxtw directly instead of going through the API
+                  // since this is a server-side background task
+                  const response = await nitroApp.ccxtw.fetchTicker(userID, exchange, symbol);
                   
                   if (response.data) {
                     const subscribers = priceSubscriptions.get(subscriptionKey);
@@ -150,24 +150,25 @@ export default defineNitroPlugin((nitroApp) => {
                 const duration = await nitroApp.ccxtw.parseTimeframe(userID, exchange, timeframe) * 1000;
                 const fromTimestamp = currentTimestamp - (duration * limit);
                 
-                // Fetch historical data
-                const response = await $fetch('/api/v1/fetchOHLCV', {
-                  query: {
-                    userID,
-                    exchange,
-                    symbol,
-                    timeframe,
-                    dateFrom: fromTimestamp,
-                    limit
-                  }
-                });
+                // Call ccxtw directly instead of going through the API
+                // since this is a server-side background task
+                const response = await nitroApp.ccxtw.fetchOHLCV(
+                  userID,
+                  exchange,
+                  symbol,
+                  timeframe,
+                  fromTimestamp,
+                  limit
+                );
+                
+                console.log(`[WebSocket] Chart data loaded - success: ${response.success}, data length: ${response.data?.length}`);
                 
                 // Send initial data to client
                 socket.emit('chart:data', {
                   symbol,
                   exchange,
                   timeframe,
-                  candles: response
+                  candles: response.data // Send response.data, not response
                 });
                 
               } catch (error) {

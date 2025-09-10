@@ -44,18 +44,18 @@ if (dbExchanges.value && dbExchanges.value.data && dbExchanges.value.data.length
 
     let currentExchange = dbExchanges.value.data[i].exchange;
 
-    const response = await $fetch('/api/v1/fetchUserDbBalance', {
+    const { data: response } = await useFetch('/api/v1/fetchUserDbBalance', {
         query:{
             exchange:currentExchange,
         }
     });
 
-    if (response.data.length) {
+    if (response.value && response.value.data && response.value.data.length) {
       exchanges.push({
         name:currentExchange,
-        lastBalance:response.data[response.data.length - 1].balance,
-        allBalance:response.data,
-        totalUSD:response.data[response.data.length - 1].totalUSD,
+        lastBalance:response.value.data[response.value.data.length - 1].balance,
+        allBalance:response.value.data,
+        totalUSD:response.value.data[response.value.data.length - 1].totalUSD,
       })
     }
   }

@@ -2,8 +2,6 @@
 import {ref, computed, watch} from "vue";
 import {useAppStore} from "~/stores/app.store";
 const app = useAppStore()
-let userID = useCookie('userID');
-
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
 
@@ -181,7 +179,6 @@ async function submit(){
   console.log('clicked')
 
   let data = {
-    userID:userID.value,
     isRunning:true,
     exchange: currentExchange.value,
     symbol:currentSymbol.value,

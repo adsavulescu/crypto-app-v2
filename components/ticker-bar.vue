@@ -1,6 +1,7 @@
 <script setup>
 import { useAppStore } from '~/stores/app.store';
 import {reloadNuxtApp} from "nuxt/app";
+import { computed } from 'vue';
 const app = useAppStore()
 const { $socket } = useNuxtApp();
 
@@ -11,7 +12,8 @@ console.log('[Ticker] Creating new ticker-bar instance:', instanceId);
 // Track if this instance is active
 let isActive = ref(true);
 
-let userID = useCookie('userID');
+// Get userID from the store instead of cookie
+const userID = computed(() => app.getCurrentUser?.id || null);
 
 let userExchanges = app.getUserExchanges;
 let selectedExchange = ref(app.getUserSelectedExchange);

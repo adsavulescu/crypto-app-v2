@@ -26,12 +26,10 @@ function startScheduler(nitroApp) {
                 let userID = exchanges[i].userID;
 
 
-                const balance = await $fetch('/api/v1/fetchBalance', {
-                    query:{
-                        userID:userID,
-                        exchange:currentExchange,
-                    }
-                });
+                // Call ccxtw directly instead of going through the API
+                // since this is a server-side background task
+                const balanceResponse = await nitroApp.ccxtw.fetchBalance(userID, currentExchange);
+                const balance = { data: balanceResponse.data };
 
                 if (balance.data) {
                     let newBalance = [];
@@ -42,13 +40,9 @@ function startScheduler(nitroApp) {
 
                             let usdtVal = 0;
 
-                            const ticker = await $fetch('/api/v1/fetchTicker', {
-                                query:{
-                                    userID:userID,
-                                    exchange:currentExchange,
-                                    symbol:`${coin}/USDT`,
-                                }
-                            });
+                            // Call ccxtw directly instead of going through the API
+                            // since this is a server-side background task
+                            const ticker = await nitroApp.ccxtw.fetchTicker(userID, currentExchange, `${coin}/USDT`);
 
                             if (ticker.data){
                                 usdtVal = math.evaluate(`${balance.data.total[coin]} * ${ticker.data.last}`).toFixed(2);

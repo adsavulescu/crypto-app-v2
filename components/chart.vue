@@ -2,10 +2,11 @@
 import { CrossUp, CrossDown } from "technicalindicators";
 import { SMA, RSI, MACD, BollingerBands } from '@debut/indicators';
 import { useAppStore } from '~/stores/app.store';
-import { inject, watch } from 'vue';
+import { inject, watch, computed } from 'vue';
 const app = useAppStore()
 
-let userID = useCookie('userID');
+// Get userID from the store instead of cookie
+const userID = computed(() => app.getCurrentUser?.id || null);
 
 // WebSocket implementation - no longer using setIntervalAsync
 
@@ -297,26 +298,48 @@ onMounted(async () => {
   // Set up socket listeners for chart data
   $socket.on('chart:data', (response) => {
     console.log('[Chart] Received initial data:', response.candles?.length, 'candles');
+    
+    // Validate that we have candles data
+    if (!response.candles || !Array.isArray(response.candles) || response.candles.length === 0) {
+      console.warn('[Chart] No valid candle data received');
+      return;
+    }
+    
     const data = formatCandlesData(response.candles, false);
     
-    //set data to chart
-    chartCandlesSeries.setData(data.candles);
-    chartVolumeSeries.setData(data.volume);
-    chartMA12Series.setData(data.MA12);
-    chartMA21Series.setData(data.MA21);
-    chartMA50Series.setData(data.MA50);
-    chartMA100Series.setData(data.MA100);
-    chartMA200Series.setData(data.MA200);
-    chartRSISeries.setData(data.RSI);
-    chartMACDSeries.setData(data.MACD);
-    chartMACDSignalSeries.setData(data.MACDSignal);
-    chartMACDHistogramSeries.setData(data.MACDHistogram);
-    chartBBLowerSeries.setData(data.BBLower);
-    chartBBMiddleSeries.setData(data.BBMiddle);
-    chartBBUpperSeries.setData(data.BBUpper);
+    // Validate formatted data before setting to chart
+    if (!data || !data.candles || !Array.isArray(data.candles) || data.candles.length === 0) {
+      console.warn('[Chart] Formatted data is invalid');
+      return;
+    }
+    
+    // Debug: Check first MA12 item for time value
+    if (data.MA12?.length > 0) {
+      console.log('[Chart] First MA12 item:', data.MA12[0]);
+    }
+    
+    // Set data to chart with validation
+    try {
+      chartCandlesSeries.setData(data.candles);
+      if (data.volume?.length) chartVolumeSeries.setData(data.volume);
+      if (data.MA12?.length) chartMA12Series.setData(data.MA12);
+      if (data.MA21?.length) chartMA21Series.setData(data.MA21);
+      if (data.MA50?.length) chartMA50Series.setData(data.MA50);
+      if (data.MA100?.length) chartMA100Series.setData(data.MA100);
+      if (data.MA200?.length) chartMA200Series.setData(data.MA200);
+      if (data.RSI?.length) chartRSISeries.setData(data.RSI);
+      if (data.MACD?.length) chartMACDSeries.setData(data.MACD);
+      if (data.MACDSignal?.length) chartMACDSignalSeries.setData(data.MACDSignal);
+      if (data.MACDHistogram?.length) chartMACDHistogramSeries.setData(data.MACDHistogram);
+      if (data.BBLower?.length) chartBBLowerSeries.setData(data.BBLower);
+      if (data.BBMiddle?.length) chartBBMiddleSeries.setData(data.BBMiddle);
+      if (data.BBUpper?.length) chartBBUpperSeries.setData(data.BBUpper);
 
-    let markers = checkForCrossOvers(data);
-    chartCandlesSeries.setMarkers(markers);
+      let markers = checkForCrossOvers(data);
+      chartCandlesSeries.setMarkers(markers);
+    } catch (error) {
+      console.error('[Chart] Error setting chart data:', error);
+    }
 
     //set last bar tracker
     if (data.candles.length) {
@@ -361,8 +384,25 @@ onMounted(async () => {
     isSocketConnected.value = true;
   });
 
-  // Use nextTick to ensure socket is ready
+  // Use nextTick to ensure socket is ready and wait for userID
   nextTick(() => {
+    // Only emit if we have a userID
+    if (!userID.value) {
+      console.log('[Chart] Waiting for userID to be available...');
+      // Watch for userID to become available
+      const unwatch = watch(userID, (newUserID) => {
+        if (newUserID) {
+          console.log('[Chart] UserID now available, loading chart data');
+          loadChartData();
+          unwatch(); // Stop watching once loaded
+        }
+      }, { immediate: true });
+    } else {
+      loadChartData();
+    }
+  });
+
+  function loadChartData() {
     // Request initial data via socket
     $socket.emit('chart:load', {
       userID: userID.value,
@@ -379,7 +419,7 @@ onMounted(async () => {
       symbol: currentSymbol.value,
       timeframe: selectedTimeframe.value[0]
     });
-  });
+  }
 
   const chartDiv = document.getElementById('chart');
 
@@ -527,26 +567,49 @@ async function updateCurrentTimeframe(timeframe) {
   MACDIndicator = new MACD(12, 26, 9);
   BBIndicator = new BollingerBands(20, 2);
 
-  // Request new data via socket
-  $socket.emit('chart:load', {
-    userID: userID.value,
-    exchange: currentExchange.value,
-    symbol: currentSymbol.value,
-    timeframe: timeframe,
-    limit: 1000
-  });
+  // Request new data via socket (only if userID is available)
+  if (userID.value) {
+    $socket.emit('chart:load', {
+      userID: userID.value,
+      exchange: currentExchange.value,
+      symbol: currentSymbol.value,
+      timeframe: timeframe,
+      limit: 1000
+    });
 
-  // Subscribe to new timeframe
-  $socket.emit('chart:subscribe', {
-    userID: userID.value,
-    exchange: currentExchange.value,
-    symbol: currentSymbol.value,
-    timeframe: timeframe
-  });
+    // Subscribe to new timeframe
+    $socket.emit('chart:subscribe', {
+      userID: userID.value,
+      exchange: currentExchange.value,
+      symbol: currentSymbol.value,
+      timeframe: timeframe
+    });
+  }
 }
 
 
 function formatCandlesData(data, live = false) {
+  // Validate input data
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    console.warn('[Chart] formatCandlesData: Invalid input data');
+    return {
+      candles: [],
+      volume: [],
+      MA12: [],
+      MA21: [],
+      MA50: [],
+      MA100: [],
+      MA200: [],
+      RSI: [],
+      MACD: [],
+      MACDSignal: [],
+      MACDHistogram: [],
+      BBLower: [],
+      BBMiddle: [],
+      BBUpper: [],
+    };
+  }
+  
   let prices = [];
   let returnData = {
     candles:[],
@@ -566,27 +629,60 @@ function formatCandlesData(data, live = false) {
   }
 
   for (let i = 0; i < data.length; i++) {
+    // CCXT returns data as arrays: [timestamp, open, high, low, close, volume]
+    let candle;
+    if (Array.isArray(data[i])) {
+      // Array format from CCXT
+      if (data[i].length < 6) {
+        console.warn('[Chart] Invalid candle array at index', i, data[i]);
+        continue;
+      }
+      candle = {
+        time: data[i][0],
+        open: data[i][1],
+        high: data[i][2],
+        low: data[i][3],
+        close: data[i][4],
+        volume: data[i][5]
+      };
+    } else {
+      // Object format (for compatibility)
+      candle = data[i];
+    }
+    
+    // Convert time to seconds if it's in milliseconds (lightweight-charts expects seconds)
+    let time = candle.time;
+    if (time > 9999999999) { // If time is in milliseconds
+      time = Math.floor(time / 1000);
+    }
+    
     returnData.candles.push({
-      time:data[i].time,
-      open:data[i].open,
-      high:data[i].high,
-      low:data[i].low,
-      close:data[i].close,
+      time: time,
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low),
+      close: parseFloat(candle.close),
     });
 
     returnData.volume.push({
-      time:data[i].time,
-      value:data[i].volume,
-      color: (data[i].open < data[i].close) ? 'rgb(38,166,154)' : 'rgb(239,83,80)'
+      time: time,
+      value: parseFloat(candle.volume || 0),
+      color: (candle.open < candle.close) ? 'rgb(38,166,154)' : 'rgb(239,83,80)'
     });
 
-    prices.push(data[i].close);
+    prices.push(candle.close);
   }
 
   // console.log(prices);
 
   let i = 0;
-  prices.forEach(price => {
+  prices.forEach((price, index) => {
+    // Get the time from the corresponding candle
+    const time = returnData.candles[index]?.time;
+    if (!time) {
+      i++;
+      return; // Skip if no corresponding time
+    }
 
     let SMA12Res = 0;
     let SMA21Res = 0;
@@ -622,59 +718,59 @@ function formatCandlesData(data, live = false) {
 
     if(SMA12Res) {
       returnData.MA12.push({
-        time:data[i].time,
+        time: time,
         value:SMA12Res,
       });
     }
 
     if(SMA21Res) {
       returnData.MA21.push({
-        time:data[i].time,
+        time: time,
         value:SMA21Res,
       });
     }
 
     if(SMA50Res) {
       returnData.MA50.push({
-        time:data[i].time,
+        time: time,
         value:SMA50Res,
       });
     }
 
     if(SMA100Res) {
       returnData.MA100.push({
-        time:data[i].time,
+        time: time,
         value:SMA100Res,
       });
     }
 
     if(SMA200Res) {
       returnData.MA200.push({
-        time:data[i].time,
+        time: time,
         value:SMA200Res,
       });
     }
 
     if(RSIRes) {
       returnData.RSI.push({
-        time:data[i].time,
+        time: time,
         value:RSIRes,
       });
     }
 
     if(MACDRes) {
       returnData.MACD.push({
-        time:data[i].time,
+        time: time,
         value:MACDRes.macd,
       });
 
       returnData.MACDSignal.push({
-        time:data[i].time,
+        time: time,
         value:MACDRes.signal,
       });
 
       returnData.MACDHistogram.push({
-        time:data[i].time,
+        time: time,
         value:MACDRes.histogram,
         color:(MACDRes.histogram > 0) ? 'rgb(38,166,154)' : 'rgb(239,83,80)'
       });
@@ -682,17 +778,17 @@ function formatCandlesData(data, live = false) {
 
     if(BBRes) {
       returnData.BBLower.push({
-        time:data[i].time,
+        time: time,
         value:BBRes.lower,
       });
 
       returnData.BBMiddle.push({
-        time:data[i].time,
+        time: time,
         value:BBRes.middle,
       });
 
       returnData.BBUpper.push({
-        time:data[i].time,
+        time: time,
         value:BBRes.upper,
       });
     }

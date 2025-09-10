@@ -21,7 +21,18 @@ definePageMeta({
 import { useAppStore } from '~/stores/app.store';
 const app = useAppStore()
 
+// Use useFetch for proper SSR cookie handling
+const { data: exchangeData } = await useFetch('/api/v1/fetchUserExchanges');
+const { data: userData } = await useFetch('/api/v1/me');
 
-await app.loadUserExchangeData();
+// Pass the fetched data to the store
+if (exchangeData.value) {
+  app.setUserExchangeData(exchangeData.value);
+}
+
+// Store user info for components that need it (like WebSocket connections)
+if (userData.value && userData.value.data) {
+  app.setCurrentUser(userData.value.data);
+}
 
 </script>

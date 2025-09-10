@@ -1,9 +1,11 @@
 <script setup>
 import { useAppStore } from '~/stores/app.store';
+import { computed } from 'vue';
 const app = useAppStore()
 const { $socket } = useNuxtApp();
 
-let userID = useCookie('userID');
+// Get userID from the store instead of cookie
+const userID = computed(() => app.getCurrentUser?.id || null);
 
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);

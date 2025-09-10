@@ -5,8 +5,6 @@ import {NButton} from "naive-ui";
 import {clearIntervalAsync, setIntervalAsync} from "set-interval-async";
 const app = useAppStore()
 
-let userID = useCookie('userID');
-
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
 
@@ -118,7 +116,6 @@ onUnmounted(() => {
 
 async function cancelOrder(row) {
   let data = {
-    userID:userID.value,
     exchange: currentExchange.value,
     id:row.id,
     symbol:currentSymbol.value,
@@ -153,8 +150,7 @@ async function fetchOrdersPooling() {
 
   let openOrdersRes = await $fetch('/api/v1/fetchOpenOrders', {
     query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
+        exchange:currentExchange.value,
       symbol:currentSymbol.value,
     }
   });
@@ -180,8 +176,7 @@ async function fetchOrdersPooling() {
   // Closed Orders
   let closedOrdersRes = await $fetch('/api/v1/fetchClosedOrders', {
     query:{
-      userID:userID.value,
-      exchange:currentExchange.value,
+        exchange:currentExchange.value,
       symbol:currentSymbol.value,
     }
   });

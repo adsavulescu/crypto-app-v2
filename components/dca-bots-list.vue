@@ -7,8 +7,6 @@ import { clearIntervalAsync, setIntervalAsync } from 'set-interval-async';
 const notification = useNotification();
 const app = useAppStore();
 
-let userID = useCookie('userID');
-
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
 
@@ -357,7 +355,6 @@ onUnmounted(() => {
 // ----- Order Actions -----
 async function cancelOrder(row) {
   const data = {
-    userID: userID.value,
     exchange: currentExchange.value,
     id: row.id,
     symbol: currentSymbol.value,
@@ -388,7 +385,6 @@ async function fetchOrdersPooling() {
   // Open Orders
   const openOrdersRes = await $fetch('/api/v1/fetchOpenOrders', {
     query: {
-      userID: userID.value,
       exchange: currentExchange.value,
       symbol: currentSymbol.value,
     }
@@ -412,7 +408,6 @@ async function fetchOrdersPooling() {
   // Closed Orders
   const closedOrdersRes = await $fetch('/api/v1/fetchClosedOrders', {
     query: {
-      userID: userID.value,
       exchange: currentExchange.value,
       symbol: currentSymbol.value,
     }
@@ -435,9 +430,7 @@ async function fetchOrdersPooling() {
 async function fetchBots() {
   try {
     const botsRes = await $fetch('/api/v1/fetchBots', {
-      query: {
-        userID: userID.value
-      }
+      query: {}
     });
 
     if (!botsRes.data) return;
@@ -548,7 +541,6 @@ async function fetchBots() {
         try {
           const tickerRes = await $fetch('/api/v1/fetchTicker', {
             query: {
-              userID: userID.value,
               exchange: bot.exchange,
               symbol: bot.symbol
             }

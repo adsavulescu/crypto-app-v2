@@ -63,6 +63,40 @@ provide('isDark', isDark);
 provide('toggleTheme', () => {
   isDark.value = !isDark.value;
 });
+
+// Suppress annoying MetaMask auto-connect errors
+if (process.client) {
+  // Override console.error to filter out MetaMask errors
+  const originalError = console.error;
+  console.error = function(...args) {
+    const errorString = args.join(' ');
+    if (errorString.includes('MetaMask') || 
+        errorString.includes('inpage.js') || 
+        errorString.includes('Failed to connect to MetaMask') ||
+        errorString.includes('MetaMask extension not found')) {
+      return; // Suppress MetaMask errors
+    }
+    originalError.apply(console, args);
+  };
+  
+  // Prevent MetaMask uncaught promise rejections
+  window.addEventListener('unhandledrejection', function(event) {
+    if (event.reason && (
+        event.reason.message?.includes('MetaMask') ||
+        event.reason.message?.includes('Failed to connect to MetaMask') ||
+        event.reason.stack?.includes('inpage.js'))) {
+      event.preventDefault();
+    }
+  });
+  
+  // Also catch any direct errors
+  window.addEventListener('error', function(event) {
+    if (event.filename?.includes('inpage.js') || 
+        event.message?.includes('MetaMask')) {
+      event.preventDefault();
+    }
+  });
+}
 </script>
 
 <style>

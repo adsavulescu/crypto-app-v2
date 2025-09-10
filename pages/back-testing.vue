@@ -66,7 +66,19 @@ const app = useAppStore()
 import { useMessage } from 'naive-ui';
 const message = useMessage()
 
-await app.loadUserExchangeData();
+// Use useFetch for proper SSR cookie handling
+const { data: exchangeData } = await useFetch('/api/v1/fetchUserExchanges');
+const { data: userData } = await useFetch('/api/v1/me');
+
+// Pass the fetched data to the store
+if (exchangeData.value) {
+  app.setUserExchangeData(exchangeData.value);
+}
+
+// Store user info for components that need it
+if (userData.value && userData.value.data) {
+  app.setCurrentUser(userData.value.data);
+}
 
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);

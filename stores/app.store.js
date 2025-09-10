@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 export const useAppStore = defineStore('app', {
     state: () => {
         return {
+            currentUser: null,
             userExchanges:[],
             userSelectedExchange:'',
             userExchangeMarkets:[],
@@ -11,6 +12,9 @@ export const useAppStore = defineStore('app', {
         }
     },
     getters:{
+        getCurrentUser(state) {
+            return state.currentUser;
+        },
         getUserExchanges(state) {
             return state.userExchanges;
         },
@@ -28,10 +32,17 @@ export const useAppStore = defineStore('app', {
         }
     },
     actions: {
+        setCurrentUser(user) {
+            this.currentUser = user;
+        },
         async loadUserExchangeData() {
+            // This is for client-side navigation
+            // $fetch will work here because cookies are available in the browser
             let response = await $fetch('/api/v1/fetchUserExchanges');
-
-            if (response.data.length) {
+            this.setUserExchangeData(response);
+        },
+        setUserExchangeData(response) {
+            if (response.data && response.data.length) {
                 let exchanges = [];
 
                 for (let i = 0; i < response.data.length; i++) {
