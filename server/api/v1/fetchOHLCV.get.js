@@ -1,22 +1,39 @@
 import {SMA, RSI, MACD} from 'technicalindicators';
 import moment from 'moment';
 import {candlesSchema} from "~/server/models/candles.schema";
+import { createError } from 'h3';
 export default defineEventHandler(async (event) => {
-
-    const nitroApp = useNitroApp()
-    const query = getQuery(event)
+    const nitroApp = useNitroApp();
+    const query = getQuery(event);
+    
+    // Get userId from authenticated context
+    const userId = event.context.userId;
+    
+    if (!userId) {
+        throw createError({ 
+            statusCode: 401, 
+            statusMessage: 'Authentication required' 
+        });
+    }
+    
+    if (!query.exchange || !query.symbol || !query.timeframe) {
+        throw createError({ 
+            statusCode: 400, 
+            statusMessage: 'Exchange, symbol, and timeframe parameters are required' 
+        });
+    }
 
 
     // you can use milliseconds integer or also parse uniform datetime string, i.e.  exchange.parse8601 ('2020-02-01T00:00:00Z') // 2023-07-01T00:00:00Z
     // const fromTimestamp = 1643659200000;
     // const fromTimestamp = await nitroApp.ccxtw.parse8601 (query.userID, query.exchange, query.dateFrom);
     const fromTimestamp = parseInt(query.dateFrom);
-    const tillTimestamp = await nitroApp.ccxtw.milliseconds(query.userID, query.exchange);
+    const tillTimestamp = await nitroApp.ccxtw.milliseconds(userId, query.exchange);
     // const timeframe = '1h';
     // const itemsLimit = 1000;
 
     // get the duration of one timeframe period in milliseconds
-    const duration = await nitroApp.ccxtw.parseTimeframe(query.userID, query.exchange, query.timeframe) * 1000;
+    const duration = await nitroApp.ccxtw.parseTimeframe(userId, query.exchange, query.timeframe) * 1000;
     // console.log ('Fetching', query.symbol, query.timeframe, 'candles', 'from', await nitroApp.ccxtw.iso8601(query.userID, query.exchange, fromTimestamp), 'to', await nitroApp.ccxtw.iso8601(query.userID, query.exchange, tillTimestamp), '...');
 
     // console.log('fromTimestamp??', fromTimestamp, query.dateFrom);
@@ -63,7 +80,7 @@ export default defineEventHandler(async (event) => {
                 since = last + duration // next start from last candle timestamp + duration
 
             } else {
-                const candles = await nitroApp.ccxtw.fetchOHLCV(query.userID, query.exchange, query.symbol, query.timeframe, since, query.limit);
+                const candles = await nitroApp.ccxtw.fetchOHLCV(userId, query.exchange, query.symbol, query.timeframe, since, query.limit);
                 // console.log('out candles', candles.data);
 
                 // const message =  '[' + query.symbol + '] Fetched ' + candles.data.length + ' ' + query.timeframe + ' candles since ' + await nitroApp.ccxtw.iso8601(query.userID, query.exchange, since);
@@ -116,7 +133,7 @@ export default defineEventHandler(async (event) => {
         } catch (e) {
 
             // console.log (query.symbol, e.constructor.name, e.message, ' Taking small pause...');
-            await nitroApp.ccxtw.sleep(query.userID, query.exchange, 2000);
+            await nitroApp.ccxtw.sleep(userId, query.exchange, 2000);
             // retry on next iteration
         }
 

@@ -153,7 +153,13 @@ async function handleValidateButtonClick(e) {
           body: data
         });
 
-        if (resp.data) {
+        console.log('Login response:', resp); // Debug log
+        
+        // Check if cookies were set
+        const authCheckAfterLogin = useCookie('auth-check');
+        console.log('Auth check cookie after login:', authCheckAfterLogin.value);
+
+        if (resp.success && resp.data) {
           notification.success({
             title: "Login Successful!",
             content: `Welcome back, ${resp.data.username}!`,
@@ -161,8 +167,13 @@ async function handleValidateButtonClick(e) {
             duration: 2500,
           });
 
-          setTimeout(async () => {
-            await navigateTo('/dashboard');
+          setTimeout(() => {
+            // Check cookie again before redirect
+            const authCheckBeforeRedirect = useCookie('auth-check');
+            console.log('Auth check before redirect:', authCheckBeforeRedirect.value);
+            
+            // Use window.location to ensure cookies are properly set
+            window.location.href = '/dashboard';
           }, 1000);
         } else {
           notification.error({

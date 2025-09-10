@@ -30,9 +30,6 @@ import { NButton } from "naive-ui";
 definePageMeta({
     middleware: 'auth'
 })
-let userIDCookie = useCookie('userID');
-let userID = userIDCookie.value;
-
 
 const notification = useNotification();
 
@@ -70,20 +67,18 @@ const tableColumns = [
     },
 ];
 
-let userExchanges = await $fetch('/api/v1/fetchUserExchanges', {
-    query:{
-        userID:userID,
-    }
-});
+const { data: userExchanges } = await useFetch('/api/v1/fetchUserExchanges');
 
 const tableData = ref([]);
-for (let i = 0; i < userExchanges.data.length; i++) {
-    tableData.value.push({
-        id:userExchanges.data[i]._id,
-        exchange:userExchanges.data[i].exchange,
-        apiKeys:userExchanges.data[i].apiKeys[0].value,
-        actions:''
-    })
+if (userExchanges.value && userExchanges.value.data) {
+    for (let i = 0; i < userExchanges.value.data.length; i++) {
+        tableData.value.push({
+            id:userExchanges.value.data[i]._id,
+            exchange:userExchanges.value.data[i].exchange,
+            apiKeys:userExchanges.value.data[i].apiKeys[0].value,
+            actions:''
+        })
+    }
 }
 
 //add data
@@ -110,7 +105,6 @@ const apiKeys = ref([
 
 async function addExchange() {
     let data = {
-        userID:userID,
         exchange:selectedExchange.value,
         apiKeys:apiKeys.value,
     }
@@ -157,7 +151,6 @@ async function addExchange() {
 
 async function deleteKeys(row) {
     let data = {
-        userID:userID,
         exchange:row.exchange,
         id:row.id,
     }

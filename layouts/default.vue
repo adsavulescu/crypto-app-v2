@@ -19,10 +19,7 @@
           </n-space>
         </n-space>
         <n-space align="center" :size="16">
-          <n-text>userID: {{userID}}</n-text>
-          <n-dropdown :options="dropdownOptions" @select="handleDropdownSelect">
-            <n-button>User profile</n-button>
-          </n-dropdown>
+          <UserProfileDropdown />
         </n-space>
       </n-space>
     </n-layout-header>
@@ -34,7 +31,6 @@
         :collapsed-width="64"
         :width="200"
         :native-scrollbar="false"
-        position="absolute"
       >
         <n-menu
           :collapsed-width="64"
@@ -42,7 +38,10 @@
           :options="sidebarOptions"
         />
       </n-layout-sider>
-      <n-layout-content position="absolute" :native-scrollbar="false" class="content-wrapper">
+      <n-layout-content 
+        :native-scrollbar="false" 
+        class="content-wrapper"
+      >
         <div class="content">
           <slot></slot>
         </div>
@@ -55,21 +54,19 @@
 <script setup>
 import NuxtLink from "#app/components/nuxt-link";
 import { h, inject, computed } from "vue";
-import { NIcon, NButton, NSpace } from "naive-ui";
+import { NIcon } from "naive-ui";
 import {
-    AppsSharp as AppsSharp,
     BarChart as BarChart,
     Analytics as Analytics,
     MenuOutline as MenuOutline,
     GitCompareOutline as GitCompareOutline,
-    BookOutline as BookIcon,
-    PersonCircleOutline as UserIcon,
-    LogOutOutline as LogoutIcon,
-    SunnyOutline as SunIcon,
-    MoonOutline as MoonIcon
+    BookOutline as BookIcon
 } from "@vicons/ionicons5";
-let userIDCookie = useCookie('userID');
-let userID = userIDCookie.value;
+// Use auth-check to determine if user is logged in
+const authCheck = useCookie('auth-check');
+const isAuthenticated = computed(() => authCheck.value === 'true' || authCheck.value === true);
+// We don't have userID in cookies anymore - it's in the JWT token
+let userID = isAuthenticated.value ? 'Authenticated' : null;
 
 // Inject theme functions from app.vue
 const isDark = inject('isDark');
@@ -80,20 +77,6 @@ function renderIcon(icon) {
 }
 
 const sidebarOptions = [
-    {
-        label: () =>
-            h(
-                NuxtLink,
-                {
-                    to: {
-                        name: 'index',
-                    }
-                },
-                { default: () => 'Home' }
-            ),
-        key: 'home',
-        icon: renderIcon(AppsSharp),
-    },
     {
         label: () =>
             h(
@@ -194,56 +177,6 @@ const sidebarOptions = [
         icon: renderIcon(GitCompareOutline),
     },
 ];
-
-const handleDropdownSelect = (key) => {
-    if (key === 'theme-toggle') {
-        toggleTheme();
-    }
-};
-
-const dropdownOptions = computed(() => [
-    {
-        label: () =>
-            h(
-                NuxtLink,
-                {
-                    to: {
-                        name: 'profile',
-                    }
-                },
-                { default: () => 'Profile' }
-            ),
-        key: 'profile',
-        icon: renderIcon(UserIcon)
-    },
-    {
-        type: 'divider',
-        key: 'd1'
-    },
-    {
-        label: isDark.value ? 'Light Mode' : 'Dark Mode',
-        key: 'theme-toggle',
-        icon: renderIcon(isDark.value ? SunIcon : MoonIcon)
-    },
-    {
-        type: 'divider',
-        key: 'd2'
-    },
-    {
-      label: () =>
-          h(
-              NuxtLink,
-              {
-                to: {
-                  name: 'logout',
-                }
-              },
-              { default: () => 'Logout' }
-          ),
-        key: 'logout',
-        icon: renderIcon(LogoutIcon)
-    }
-]);
 
 
 

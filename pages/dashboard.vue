@@ -32,26 +32,20 @@ import { Pie } from 'vue-chartjs'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
-let userID = useCookie('userID');
 
 let loaded = true;
-//get user exchanges
-const dbExchanges = await $fetch('/api/v1/fetchUserExchanges', {
-  query:{
-    userID:userID.value,
-  }
-});
+//get user exchanges - use useFetch for proper SSR cookie handling
+const { data: dbExchanges } = await useFetch('/api/v1/fetchUserExchanges');
 
 let exchanges = [];
 
-if (dbExchanges.data.length) {
-  for (let i = 0; i < dbExchanges.data.length; i++) {
+if (dbExchanges.value && dbExchanges.value.data && dbExchanges.value.data.length) {
+  for (let i = 0; i < dbExchanges.value.data.length; i++) {
 
-    let currentExchange = dbExchanges.data[i].exchange;
+    let currentExchange = dbExchanges.value.data[i].exchange;
 
     const response = await $fetch('/api/v1/fetchUserDbBalance', {
         query:{
-            userID:userID.value,
             exchange:currentExchange,
         }
     });

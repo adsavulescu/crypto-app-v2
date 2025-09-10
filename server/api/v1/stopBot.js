@@ -1,19 +1,34 @@
+import { createError } from 'h3';
+
 // server/api/v1/stopBot.js
 import { dcaBotSchema } from '~/server/models/dcaBot.schema';
 
 export default defineEventHandler(async (event) => {
     const { botId } = await readBody(event);
+    
+    // Get userId from authenticated context
+    const userId = event.context.userId;
+    
+    if (!userId) {
+        throw createError({ 
+            statusCode: 401, 
+            statusMessage: 'Authentication required' 
+        });
+    }
 
     if (!botId) {
         throw createError({ statusCode: 400, statusMessage: 'Missing botId parameter' });
     }
 
     try {
-        // Find the bot
-        const bot = await dcaBotSchema.findById(botId);
+        // Find the bot and verify ownership
+        const bot = await dcaBotSchema.findOne({ _id: botId, userID: userId });
         
         if (!bot) {
-            throw createError({ statusCode: 404, statusMessage: 'Bot not found' });
+            throw createError({ 
+                statusCode: 404, 
+                statusMessage: 'Bot not found or access denied' 
+            });
         }
 
         // Set isRunning to false - this prevents new deals from starting

@@ -41,9 +41,9 @@ definePageMeta({
 })
 import { useAppStore } from '~/stores/app.store';
 const app = useAppStore()
-let userID = useCookie('userID');
 
-await app.loadUserExchangeData(userID.value);
+
+await app.loadUserExchangeData();
 </script>
 
 <style scoped>

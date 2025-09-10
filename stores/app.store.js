@@ -28,12 +28,8 @@ export const useAppStore = defineStore('app', {
         }
     },
     actions: {
-        async loadUserExchangeData(userID) {
-            let response = await $fetch('/api/v1/fetchUserExchanges', {
-                query:{
-                    userID,
-                }
-            });
+        async loadUserExchangeData() {
+            let response = await $fetch('/api/v1/fetchUserExchanges');
 
             if (response.data.length) {
                 let exchanges = [];

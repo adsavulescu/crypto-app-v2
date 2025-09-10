@@ -62,11 +62,11 @@ import { suportResistanceStrategy } from '~/strategies/suportResistanceStrategy'
 import { SMA, RSI, ADX, MACD, BollingerBands, SuperTrend, ATR } from '@debut/indicators';
 import { useAppStore } from '~/stores/app.store';
 const app = useAppStore()
-let userID = useCookie('userID');
+
 import { useMessage } from 'naive-ui';
 const message = useMessage()
 
-await app.loadUserExchangeData(userID.value);
+await app.loadUserExchangeData();
 
 let currentExchange = ref(app.getUserSelectedExchange);
 let currentSymbol = ref(app.getUserSelectedMarket);
@@ -1057,7 +1057,6 @@ async function submitBacktest() {
 
   timeframeData = await $fetch('/api/v1/fetchTimeframeDuration', {
     query: {
-      userID: userID.value,
       exchange: currentExchange.value,
       timeframe: selectedTimeframe.value,
     }
@@ -1065,7 +1064,6 @@ async function submitBacktest() {
 
   let candlesData = await $fetch('/api/v1/fetchOHLCV', {
     query: {
-      userID: userID.value,
       exchange: currentExchange.value,
       symbol: currentSymbol.value,
       timeframe: selectedTimeframe.value,

@@ -405,9 +405,9 @@ definePageMeta({
   layout: "no-sidebar",
 });
 
-// Check if user is authenticated
-const userIDCookie = useCookie('userID');
-const isAuthenticated = computed(() => !!userIDCookie.value);
+// Check if user is authenticated using the new auth-check cookie
+const authCheck = useCookie('auth-check');
+const isAuthenticated = computed(() => authCheck.value === 'true' || authCheck.value === true);
 </script>
 
 <style scoped>

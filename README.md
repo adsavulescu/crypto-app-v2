@@ -1,6 +1,6 @@
-# Crypto Trading App v2
+# MicroTrade - Precision Trading Services
 
-A professional cryptocurrency trading application built with Nuxt 3, featuring advanced DCA (Dollar Cost Averaging) bots with AI-powered signal detection, real-time market data, and multi-exchange support.
+A professional cryptocurrency trading SaaS platform built with Nuxt 3, featuring advanced DCA (Dollar Cost Averaging) bots with AI-powered signal detection, real-time market data, and multi-exchange support. MicroTrade specializes in executing thousands of micro-trades with surgical precision, compounding small wins into significant portfolio growth.
 
 ## 🚀 Features
 

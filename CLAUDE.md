@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Nuxt 3 full-stack cryptocurrency trading application with advanced DCA (Dollar Cost Averaging) bot functionality featuring AI-powered direction detection and smart entry timing. The application integrates with multiple exchanges via CCXT, provides automated trading strategies, and includes machine learning capabilities.
+MicroTrade is a Nuxt 3 full-stack cryptocurrency trading SaaS platform specializing in precision micro-trading services. The platform features advanced DCA (Dollar Cost Averaging) bot functionality with AI-powered direction detection and smart entry timing. MicroTrade's philosophy is "Micro Precision. Macro Profits." - executing thousands of small, precise trades that compound into significant portfolio growth. The application integrates with multiple exchanges via CCXT, provides automated trading strategies, and includes machine learning capabilities.
 
 ## Development Commands
 

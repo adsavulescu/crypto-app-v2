@@ -1,13 +1,30 @@
 import {SMA, RSI, MACD} from 'technicalindicators';
 import moment from 'moment';
 import {candlesSchema} from "~/server/models/candles.schema";
+import { createError } from 'h3';
+
 export default defineEventHandler(async (event) => {
+    const nitroApp = useNitroApp();
+    const query = getQuery(event);
+    
+    // Get userId from authenticated context
+    const userId = event.context.userId;
+    
+    if (!userId) {
+        throw createError({ 
+            statusCode: 401, 
+            statusMessage: 'Authentication required' 
+        });
+    }
+    
+    if (!query.exchange || !query.symbol || !query.timeframe) {
+        throw createError({ 
+            statusCode: 400, 
+            statusMessage: 'Exchange, symbol, and timeframe parameters are required' 
+        });
+    }
 
-    const nitroApp = useNitroApp()
-    const query = getQuery(event)
-
-
-    const candles = await nitroApp.ccxtw.fetchOHLCV(query.userID, query.exchange, query.symbol, query.timeframe, undefined, 1);
+    const candles = await nitroApp.ccxtw.fetchOHLCV(userId, query.exchange, query.symbol, query.timeframe, undefined, 1);
 
     //candles data
     let candlesData = [];

@@ -1,19 +1,37 @@
+import { createError } from 'h3';
+
 export default defineEventHandler(async (event) => {
-    const nitroApp = useNitroApp()
-    const data = await readBody(event)
+    const nitroApp = useNitroApp();
+    const data = await readBody(event);
+    
+    // Get userId from authenticated context
+    const userId = event.context.userId;
+    
+    if (!userId) {
+        throw createError({ 
+            statusCode: 401, 
+            statusMessage: 'Authentication required' 
+        });
+    }
+    
+    if (!data.exchange || !data.symbol || !data.timeframe || !data.date?.from) {
+        throw createError({ 
+            statusCode: 400, 
+            statusMessage: 'Exchange, symbol, timeframe, and date range are required' 
+        });
+    }
 
-    //
-    // //get historical data
-    // let response = await nitroApp.ccxtw.fetchOHLCV(data.userID, data.exchange, data.symbol);
-
+    // Fetch historical data with authentication passed through
     let historicalData = await $fetch('/api/v1/fetchOHLCV', {
         query:{
-            userID:data.userID,
             exchange:data.exchange,
             symbol:data.symbol,
             timeframe:data.timeframe,
             dateFrom:data.date.from,
             limit:1000,
+        },
+        headers: {
+            cookie: event.node.req.headers.cookie  // Pass cookies for auth
         }
     });
 
