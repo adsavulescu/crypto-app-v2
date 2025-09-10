@@ -804,7 +804,6 @@ export default defineNitroPlugin((nitroApp) => {
         // Auto direction detection using composite score system
         detectAutoDirection: async function(bot) {
             try {
-                console.log(`Auto direction detection for ${bot.symbol}...`);
                 
                 // Fetch last 100 1-hour candles (100 hours = ~4 days)
                 const now = Date.now();
@@ -820,7 +819,7 @@ export default defineNitroPlugin((nitroApp) => {
                 );
                 
                 if (!candlesResponse.success || !candlesResponse.data || candlesResponse.data.length < 50) {
-                    console.log('Insufficient candle data for auto detection, defaulting to long');
+                    console.log(`${this.getCurrentTime()}: ${bot.symbol} - Auto Direction - Insufficient data, defaulting to LONG`);
                     return 'long';
                 }
                 
@@ -831,6 +830,7 @@ export default defineNitroPlugin((nitroApp) => {
                 const volumes = candles.map(c => c[5]);
                 
                 let score = 0;
+                let indicators = [];
                 
                 // 1. EMA Crossover Score (+2/-2 points)
                 const ema9 = EMA.calculate({period: 9, values: closes});
@@ -846,14 +846,12 @@ export default defineNitroPlugin((nitroApp) => {
                     // Bullish alignment: price > EMA9 > EMA21 > EMA50
                     if (currentPrice > lastEma9 && lastEma9 > lastEma21 && lastEma21 > lastEma50) {
                         score += 2;
-                        console.log('  EMA alignment: Bullish (+2)');
+                        indicators.push('EMA:Bull(+2)');
                     }
                     // Bearish alignment: price < EMA9 < EMA21 < EMA50
                     else if (currentPrice < lastEma9 && lastEma9 < lastEma21 && lastEma21 < lastEma50) {
                         score -= 2;
-                        console.log('  EMA alignment: Bearish (-2)');
-                    } else {
-                        console.log('  EMA alignment: Mixed (0)');
+                        indicators.push('EMA:Bear(-2)');
                     }
                 }
                 
@@ -885,18 +883,18 @@ export default defineNitroPlugin((nitroApp) => {
                     // Max score is 4.5, midpoint is 2.25
                     if (maScore >= 3.5) {
                         score += 3;
-                        console.log(`  MA Analysis: Strong bullish trend (${maScore.toFixed(1)}) (+3)`);
+                        indicators.push(`MA:Bull(+3)`);
                     } else if (maScore >= 2.5) {
                         score += 1;
-                        console.log(`  MA Analysis: Moderate bullish (${maScore.toFixed(1)}) (+1)`);
+                        indicators.push(`MA:Bull(+1)`);
                     } else if (maScore >= 2.0) {
-                        console.log(`  MA Analysis: Neutral-bullish (${maScore.toFixed(1)}) (0)`);
+                        // Neutral, no score change
                     } else if (maScore >= 1.0) {
                         score -= 1;
-                        console.log(`  MA Analysis: Moderate bearish (${maScore.toFixed(1)}) (-1)`);
+                        indicators.push(`MA:Bear(-1)`);
                     } else {
                         score -= 3;
-                        console.log(`  MA Analysis: Strong bearish trend (${maScore.toFixed(1)}) (-3)`);
+                        indicators.push(`MA:Bear(-3)`);
                     }
                 }
                 
@@ -907,12 +905,10 @@ export default defineNitroPlugin((nitroApp) => {
                     
                     if (currentRSI < 30) {
                         score += 1;
-                        console.log(`  RSI: ${currentRSI.toFixed(2)} - Oversold (+1)`);
+                        indicators.push(`RSI:${currentRSI.toFixed(0)}(+1)`);
                     } else if (currentRSI > 70) {
                         score -= 1;
-                        console.log(`  RSI: ${currentRSI.toFixed(2)} - Overbought (-1)`);
-                    } else {
-                        console.log(`  RSI: ${currentRSI.toFixed(2)} - Neutral (0)`);
+                        indicators.push(`RSI:${currentRSI.toFixed(0)}(-1)`);
                     }
                 }
                 
@@ -933,12 +929,10 @@ export default defineNitroPlugin((nitroApp) => {
                     if (lastMACD.histogram && prevMACD.histogram) {
                         if (lastMACD.histogram > prevMACD.histogram) {
                             score += 1;
-                            console.log('  MACD histogram: Rising (+1)');
+                            indicators.push('MACD:Up(+1)');
                         } else if (lastMACD.histogram < prevMACD.histogram) {
                             score -= 1;
-                            console.log('  MACD histogram: Falling (-1)');
-                        } else {
-                            console.log('  MACD histogram: Flat (0)');
+                            indicators.push('MACD:Down(-1)');
                         }
                     }
                 }
@@ -951,9 +945,7 @@ export default defineNitroPlugin((nitroApp) => {
                 
                 if (avgVolume > 0 && currentVolume > avgVolume * 1.2) {
                     score += 1;
-                    console.log('  Volume: Above average (+1)');
-                } else {
-                    console.log('  Volume: Normal (0)');
+                    indicators.push('Vol(+1)');
                 }
                 
                 // 6. Candle Pattern Score (+1/-1 points)
@@ -968,31 +960,29 @@ export default defineNitroPlugin((nitroApp) => {
                 // Bullish engulfing or strong bullish candle
                 if (lastClose > lastOpen && (lastClose - lastOpen) > (Math.abs(prevClose - prevOpen) * 1.5)) {
                     score += 1;
-                    console.log('  Candle pattern: Bullish (+1)');
+                    indicators.push('Candle:Bull(+1)');
                 }
                 // Bearish engulfing or strong bearish candle
                 else if (lastOpen > lastClose && (lastOpen - lastClose) > (Math.abs(prevClose - prevOpen) * 1.5)) {
                     score -= 1;
-                    console.log('  Candle pattern: Bearish (-1)');
-                } else {
-                    console.log('  Candle pattern: Neutral (0)');
+                    indicators.push('Candle:Bear(-1)');
                 }
                 
                 // Final decision based on score
-                console.log(`  Total Score: ${score}`);
+                let decision = '';
                 
                 if (score >= 3) {
-                    console.log('  Decision: LONG');
-                    return 'long';
+                    decision = 'LONG';
                 } else if (score <= -3) {
-                    console.log('  Decision: SHORT');
-                    return 'short';
+                    decision = 'SHORT';
                 } else {
-                    console.log('  Decision: WAIT (defaulting to long)');
-                    // For DCA bot, we'll default to long if uncertain
-                    // You could also return 'wait' and handle it differently
-                    return 'long';
+                    decision = 'LONG'; // Default to long if uncertain
                 }
+                
+                // Single line log output
+                console.log(`${this.getCurrentTime()}: ${bot.symbol} - Auto Direction - Score: ${score} [${indicators.join(', ')}] - Decision: ${decision}`);
+                
+                return decision.toLowerCase();
                 
             } catch (error) {
                 console.error('Error in auto direction detection:', error);
@@ -1009,8 +999,6 @@ export default defineNitroPlugin((nitroApp) => {
                     (bot.direction === 'auto' && bot.activeDeal?.detectedDirection) || 
                     (bot.direction === 'auto' ? 'long' : bot.direction); // Default to long if auto but no detection yet
                 
-                console.log(`Smart entry detection for ${bot.symbol} (${actualDirection})...`);
-                
                 // Fetch last 100 30-minute candles (50 hours = ~2 days for better context)
                 const now = Date.now();
                 const fromTimestamp = now - (100 * 30 * 60 * 1000); // 100 * 30 minutes
@@ -1025,7 +1013,7 @@ export default defineNitroPlugin((nitroApp) => {
                 );
                 
                 if (!candlesResponse.success || !candlesResponse.data || candlesResponse.data.length < 30) {
-                    console.log('Insufficient candle data for smart entry, allowing entry');
+                    console.log(`${this.getCurrentTime()}: ${bot.symbol} - Smart Entry - Insufficient data, allowing entry`);
                     return true; // Allow entry if we can't determine
                 }
                 
@@ -1065,7 +1053,7 @@ export default defineNitroPlugin((nitroApp) => {
                 // Check if we have enough data for indicators
                 if (sma20.length < 2 || rsiValues.length < 5 || bbResult.length < 2 || 
                     atrValues.length < 2 || ema9.length < 2 || ema21.length < 2) {
-                    console.log('Not enough indicator data, allowing entry');
+                    console.log(`${this.getCurrentTime()}: ${bot.symbol} - Smart Entry - Insufficient indicator data, allowing entry`);
                     return true;
                 }
                 
@@ -1205,15 +1193,15 @@ export default defineNitroPlugin((nitroApp) => {
                     // PENALTIES - Avoid buying at tops
                     if (currentRSI > 70) {
                         entryScore -= 2;
-                        penalties.push(`RSI extreme overbought (${currentRSI.toFixed(1)})`);
+                        penalties.push(`RSI>${currentRSI.toFixed(0)}`);
                     }
                     if (lastBB && currentPrice > lastBB.upper * 0.98) {
                         entryScore -= 1;
-                        penalties.push('At upper Bollinger Band');
+                        penalties.push('UpperBB');
                     }
                     if (pullbackCount < 1) {
                         entryScore -= 1;
-                        penalties.push('No recent pullback');
+                        penalties.push('NoPullback');
                     }
                     
                     // PRIMARY SIGNALS (High Weight)
@@ -1221,32 +1209,32 @@ export default defineNitroPlugin((nitroApp) => {
                     const maBounce = checkMABounce();
                     if (maBounce && pullbackCount >= 1) {
                         entryScore += 3;
-                        reasons.push(`Bouncing off ${maBounce}`);
+                        reasons.push(maBounce);
                     }
                     
                     // 2. Support Bounce (+2 points)
                     if (checkSupportResistance('long') && pullbackCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Bouncing off support level');
+                        reasons.push('Support');
                     }
                     
                     // 3. Bollinger Band Bounce (+2 points)
                     if (lastBB && currentPrice <= lastBB.lower * 1.02 && currentPrice > lastBB.lower && pullbackCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Bouncing off lower Bollinger Band');
+                        reasons.push('LowerBB');
                     }
                     
                     // CONFIRMATION INDICATORS
                     // 4. MACD turning (+1 point)
                     if (macdTurning) {
                         entryScore += 1;
-                        reasons.push('MACD turning bullish');
+                        reasons.push('MACD+');
                     }
                     
                     // 5. RSI recovery (+1 point)
                     if (rsiMin < 40 && currentRSI > rsiMin + 5 && currentRSI < 60) {
                         entryScore += 1;
-                        reasons.push(`RSI recovering from ${rsiMin.toFixed(1)}`);
+                        reasons.push(`RSI>${rsiMin.toFixed(0)}`);
                     }
                     
                     // 6. ATR confirms meaningful bounce (+1 point)
@@ -1256,14 +1244,14 @@ export default defineNitroPlugin((nitroApp) => {
                         const bounceSize = Math.abs(lastCandle[4] - prevCandle[4]);
                         if (bounceSize > currentATR * 0.5) {
                             entryScore += 1;
-                            reasons.push('Meaningful bounce (>0.5x ATR)');
+                            reasons.push('ATR+');
                         }
                     }
                     
                     // 7. Volume increase (+1 point)
                     if (volumeSpike && candles.length >= 2 && currentPrice > candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Volume spike on bounce');
+                        reasons.push('Vol+');
                     }
                     
                 } else {
@@ -1272,15 +1260,15 @@ export default defineNitroPlugin((nitroApp) => {
                     // PENALTIES - Avoid shorting at bottoms
                     if (currentRSI < 30) {
                         entryScore -= 2;
-                        penalties.push(`RSI extreme oversold (${currentRSI.toFixed(1)})`);
+                        penalties.push(`RSI<${currentRSI.toFixed(0)}`);
                     }
                     if (lastBB && currentPrice < lastBB.lower * 1.02) {
                         entryScore -= 1;
-                        penalties.push('At lower Bollinger Band');
+                        penalties.push('LowerBB');
                     }
                     if (rallyCount < 1) {
                         entryScore -= 1;
-                        penalties.push('No recent rally');
+                        penalties.push('NoRally');
                     }
                     
                     // PRIMARY SIGNALS (High Weight)
@@ -1288,32 +1276,32 @@ export default defineNitroPlugin((nitroApp) => {
                     const maRejection = checkMABounce();
                     if (maRejection && rallyCount >= 1) {
                         entryScore += 3;
-                        reasons.push(`Rejected at ${maRejection}`);
+                        reasons.push(maRejection);
                     }
                     
                     // 2. Resistance Rejection (+2 points)
                     if (checkSupportResistance('short') && rallyCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Rejected at resistance level');
+                        reasons.push('Resistance');
                     }
                     
                     // 3. Bollinger Band Rejection (+2 points)
                     if (lastBB && currentPrice >= lastBB.upper * 0.98 && currentPrice < lastBB.upper && rallyCount >= 1) {
                         entryScore += 2;
-                        reasons.push('Rejected at upper Bollinger Band');
+                        reasons.push('UpperBB');
                     }
                     
                     // CONFIRMATION INDICATORS
                     // 4. MACD turning (+1 point)
                     if (macdTurning) {
                         entryScore += 1;
-                        reasons.push('MACD turning bearish');
+                        reasons.push('MACD-');
                     }
                     
                     // 5. RSI rejection (+1 point)
                     if (rsiMax > 60 && currentRSI < rsiMax - 5 && currentRSI > 40) {
                         entryScore += 1;
-                        reasons.push(`RSI declining from ${rsiMax.toFixed(1)}`);
+                        reasons.push(`RSI<${rsiMax.toFixed(0)}`);
                     }
                     
                     // 6. ATR confirms meaningful rejection (+1 point)
@@ -1323,14 +1311,14 @@ export default defineNitroPlugin((nitroApp) => {
                         const rejectionSize = Math.abs(prevCandle[4] - lastCandle[4]);
                         if (rejectionSize > currentATR * 0.5) {
                             entryScore += 1;
-                            reasons.push('Meaningful rejection (>0.5x ATR)');
+                            reasons.push('ATR-');
                         }
                     }
                     
                     // 7. Volume increase (+1 point)
                     if (volumeSpike && candles.length >= 2 && currentPrice < candles[candles.length - 2][4]) {
                         entryScore += 1;
-                        reasons.push('Volume spike on rejection');
+                        reasons.push('Vol-');
                     }
                 }
                 
@@ -1338,15 +1326,21 @@ export default defineNitroPlugin((nitroApp) => {
                 const threshold = 4; // Score ≥4 for entry (balanced for DCA strategy)
                 const shouldEnter = entryScore >= threshold;
                 
-                console.log(`  Entry Score: ${entryScore}/${threshold}`);
-                if (penalties.length > 0) {
-                    console.log(`  ⚠️ Penalties: ${penalties.join(', ')}`);
-                }
+                // Build single line log output
+                let logParts = [];
+                logParts.push(`${this.getCurrentTime()}: ${bot.symbol} - Smart Entry (${actualDirection})`);
+                logParts.push(`Score: ${entryScore}/${threshold}`);
+                
                 if (reasons.length > 0) {
-                    console.log(`  ✓ Conditions: ${reasons.join(', ')}`);
+                    logParts.push(`[${reasons.join(', ')}]`);
                 }
-                console.log(`  Price Position: ${(pricePosition * 100).toFixed(1)}% (0%=low, 100%=high)`);
-                console.log(`  Decision: ${shouldEnter ? '✅ ENTER NOW' : '⏳ WAIT FOR BETTER ENTRY'}`);
+                if (penalties.length > 0) {
+                    logParts.push(`Penalties: [${penalties.join(', ')}]`);
+                }
+                logParts.push(`Price: ${(pricePosition * 100).toFixed(0)}%`);
+                logParts.push(shouldEnter ? 'ENTER' : 'WAIT');
+                
+                console.log(logParts.join(' - '));
                 
                 return shouldEnter;
                 
