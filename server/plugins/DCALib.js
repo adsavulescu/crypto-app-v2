@@ -276,6 +276,10 @@ export default defineNitroPlugin((nitroApp) => {
                     'stopPrice': stopLossOrderPrice
                 };
             }
+            stopLossOrderPrice = await nitroApp.ccxtw.priceToPrecision(bot.userID, bot.exchange, bot.symbol, stopLossOrderPrice);
+            tpPrice = await nitroApp.ccxtw.priceToPrecision(bot.userID, bot.exchange, bot.symbol, tpPrice);
+            totalAmount = await nitroApp.ccxtw.amountToPrecision(bot.userID, bot.exchange, bot.symbol, totalAmount);
+            
             if(bot.marketType === 'spot') {
                 type = 'oco';
                 params = {
@@ -284,9 +288,6 @@ export default defineNitroPlugin((nitroApp) => {
                     stopLimitPrice: stopLossOrderPrice
                 };
             }
-
-            stopLossOrderPrice = await nitroApp.ccxtw.priceToPrecision(bot.userID, bot.exchange, bot.symbol, stopLossOrderPrice);
-            totalAmount = await nitroApp.ccxtw.amountToPrecision(bot.userID, bot.exchange, bot.symbol, totalAmount);
 
             let orderResponse = await nitroApp.ccxtw.createOrder(
                 bot.userID,
@@ -325,7 +326,7 @@ export default defineNitroPlugin((nitroApp) => {
 
             if (!orderResponse.success) {
                 bot.activeDeal.stopLossOrder = null;
-                log =`${this.getCurrentTime()}: ${bot.symbol} - ${bot.activeDeal.status} - ${orderResponse.log} - Type: ${type}, Side: ${side.mainDirection}, Amount: ${totalAmount}, Price: ${stopLossOrderPrice}`;
+                log =`${this.getCurrentTime()}: ${bot.symbol} - ${bot.activeDeal.status} - ${orderResponse.log} - Type: ${type}, Side: ${side.oppositeDirection}, Amount: ${totalAmount}, Price: ${stopLossOrderPrice}`;
                 bot.logs.push(log);
                 console.log(log);
                 
