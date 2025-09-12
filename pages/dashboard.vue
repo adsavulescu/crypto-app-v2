@@ -45,68 +45,59 @@
 
     <!-- Main Dashboard Content -->
     <div v-else class="dashboard-content">
-      <!-- Portfolio Overview Cards -->
-      <n-grid :x-gap="16" :y-gap="16" :cols="24" class="overview-grid">
-        <n-gi :span="24" :xs="24" :sm="12" :md="6">
-          <n-card class="stat-card">
-            <n-statistic label="Total Portfolio Value">
-              <template #prefix>$</template>
-              {{ formatNumber(totalPortfolioValue) }}
-            </n-statistic>
-            <div class="stat-change" :class="{ positive: dayChange >= 0, negative: dayChange < 0 }">
-              <n-icon :component="dayChange >= 0 ? TrendingUpIcon : TrendingDownIcon" />
-              {{ Math.abs(dayChange).toFixed(2) }}% (24h)
+      <!-- Portfolio Overview Card -->
+      <n-card class="overview-card">
+        <div class="overview-stats">
+          <!-- Total Portfolio Value -->
+          <div class="stat-item">
+            <div class="stat-label">Total Portfolio Value</div>
+            <div class="stat-value">
+              <span class="value-main">${{ formatNumber(totalPortfolioValue) }}</span>
+              <span class="stat-change" :class="{ positive: dayChange >= 0, negative: dayChange < 0 }">
+                <n-icon :component="dayChange >= 0 ? TrendingUpIcon : TrendingDownIcon" size="14" />
+                {{ Math.abs(dayChange).toFixed(2) }}% (24h)
+              </span>
             </div>
-          </n-card>
-        </n-gi>
-        
-        <n-gi :span="24" :xs="24" :sm="12" :md="6">
-          <n-card class="stat-card">
-            <n-statistic label="Total Assets">
-              {{ totalAssets }}
-              <template #suffix>
-                <span class="stat-suffix">across {{ exchanges.length }} exchange{{ exchanges.length !== 1 ? 's' : '' }}</span>
-              </template>
-            </n-statistic>
-          </n-card>
-        </n-gi>
-        
-        <n-gi :span="24" :xs="24" :sm="12" :md="6">
-          <n-card class="stat-card">
-            <n-statistic label="Best Performer (24h)">
+          </div>
+          
+          <!-- Total Assets -->
+          <div class="stat-item">
+            <div class="stat-label">Total Assets</div>
+            <div class="stat-value">
+              <span class="value-main">{{ totalAssets }}</span>
+              <span class="value-sub">across {{ exchanges.length }} exchange{{ exchanges.length !== 1 ? 's' : '' }}</span>
+            </div>
+          </div>
+          
+          <!-- Best Performer -->
+          <div class="stat-item">
+            <div class="stat-label">Best Performer (24h)</div>
+            <div class="stat-value">
               <template v-if="performanceData?.bestPerformer">
-                <div class="asset-performance">
-                  <span class="asset-name">{{ performanceData.bestPerformer.coin }}</span>
-                  <span class="asset-change positive">
-                    {{ performanceData.bestPerformer.change > 0 ? '+' : '' }}{{ performanceData.bestPerformer.change }}%
-                  </span>
-                </div>
+                <span class="value-main">{{ performanceData.bestPerformer.coin }}</span>
+                <span class="stat-change positive">
+                  {{ performanceData.bestPerformer.change > 0 ? '+' : '' }}{{ performanceData.bestPerformer.change }}%
+                </span>
               </template>
-              <template v-else>
-                <span class="no-data">No data</span>
-              </template>
-            </n-statistic>
-          </n-card>
-        </n-gi>
-        
-        <n-gi :span="24" :xs="24" :sm="12" :md="6">
-          <n-card class="stat-card">
-            <n-statistic label="Worst Performer (24h)">
+              <span v-else class="no-data">No data</span>
+            </div>
+          </div>
+          
+          <!-- Worst Performer -->
+          <div class="stat-item">
+            <div class="stat-label">Worst Performer (24h)</div>
+            <div class="stat-value">
               <template v-if="performanceData?.worstPerformer">
-                <div class="asset-performance">
-                  <span class="asset-name">{{ performanceData.worstPerformer.coin }}</span>
-                  <span class="asset-change negative">
-                    {{ performanceData.worstPerformer.change > 0 ? '+' : '' }}{{ performanceData.worstPerformer.change }}%
-                  </span>
-                </div>
+                <span class="value-main">{{ performanceData.worstPerformer.coin }}</span>
+                <span class="stat-change negative">
+                  {{ performanceData.worstPerformer.change > 0 ? '+' : '' }}{{ performanceData.worstPerformer.change }}%
+                </span>
               </template>
-              <template v-else>
-                <span class="no-data">No data</span>
-              </template>
-            </n-statistic>
-          </n-card>
-        </n-gi>
-      </n-grid>
+              <span v-else class="no-data">No data</span>
+            </div>
+          </div>
+        </div>
+      </n-card>
 
       <!-- Portfolio History Chart -->
       <n-card class="chart-card" title="Portfolio Value History" v-if="historyChartData">
@@ -239,31 +230,18 @@ const totalAssets = computed(() => {
 const dayChange = computed(() => {
   // Calculate 24h change from historical data
   if (!exchanges.value || exchanges.value.length === 0) return 0
+  if (!portfolioHistory24h.value) return 0
   
-  let currentTotal = totalPortfolioValue.value
-  let previousTotal = 0
-  
-  // Get yesterday's balance from historical data
-  exchanges.value.forEach(exchange => {
-    if (exchange.allBalance && exchange.allBalance.length > 1) {
-      // Find balance from ~24 hours ago
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      const previousBalance = exchange.allBalance
-        .filter(b => new Date(b.timestamp) <= oneDayAgo)
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]
-      
-      if (previousBalance) {
-        previousTotal += previousBalance.totalUSD || 0
-      }
-    }
-  })
+  const currentTotal = totalPortfolioValue.value
+  const previousTotal = portfolioHistory24h.value
   
   if (previousTotal === 0) return 0
-  return (((currentTotal - previousTotal) / previousTotal) * 100).toFixed(2)
+  return ((currentTotal - previousTotal) / previousTotal * 100).toFixed(2)
 })
 
 // Store performance data
 const performanceData = ref(null)
+const portfolioHistory24h = ref(0)
 
 const largestHolding = computed(() => {
   // Find the asset with the highest USD value across all exchanges
@@ -323,38 +301,64 @@ const historyChartData = computed(() => {
   const days = periods[selectedPeriod.value]
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   
+  // For 24h view, we want hourly data points
+  const isHourlyView = selectedPeriod.value === '24h'
+  
   // Aggregate historical data from all exchanges
-  const aggregatedData = new Map() // date string -> total USD
+  const aggregatedData = new Map() // timestamp or date string -> total USD
   
   exchanges.value.forEach(exchange => {
     if (exchange.allBalance && exchange.allBalance.length > 0) {
       exchange.allBalance.forEach(balance => {
         const date = new Date(balance.timestamp)
         if (date >= cutoffDate) {
-          const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          const current = aggregatedData.get(dateStr) || 0
-          aggregatedData.set(dateStr, current + (balance.totalUSD || 0))
+          let key
+          if (isHourlyView) {
+            // For 24h view, group by hour
+            const hour = date.getHours()
+            const hourStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + hour.toString().padStart(2, '0') + ':00'
+            key = hourStr
+          } else {
+            // For other views, group by day
+            key = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          }
+          
+          const current = aggregatedData.get(key) || { total: 0, count: 0, timestamp: date }
+          aggregatedData.set(key, {
+            total: current.total + (balance.totalUSD || 0),
+            count: current.count + 1,
+            timestamp: date
+          })
         }
       })
     }
   })
   
   // Add current balance as the most recent point
-  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  aggregatedData.set(today, totalPortfolioValue.value)
+  const now = new Date()
+  const currentKey = isHourlyView 
+    ? now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + now.getHours().toString().padStart(2, '0') + ':00'
+    : now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   
-  // Convert to arrays and sort by date
+  aggregatedData.set(currentKey, {
+    total: totalPortfolioValue.value,
+    count: 1,
+    timestamp: now
+  })
+  
+  // Convert to arrays and sort by timestamp
   const sortedEntries = Array.from(aggregatedData.entries())
-    .sort((a, b) => {
-      const dateA = new Date(a[0] + ', ' + new Date().getFullYear())
-      const dateB = new Date(b[0] + ', ' + new Date().getFullYear())
-      return dateA - dateB
-    })
+    .map(([key, value]) => ({
+      label: key,
+      value: value.total / value.count, // Average if multiple data points
+      timestamp: value.timestamp
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
   
   if (sortedEntries.length === 0) {
     // If no historical data, just show current value
     return {
-      labels: [today],
+      labels: [currentKey],
       datasets: [{
         label: 'Portfolio Value',
         data: [totalPortfolioValue.value],
@@ -366,8 +370,32 @@ const historyChartData = computed(() => {
     }
   }
   
-  const labels = sortedEntries.map(entry => entry[0])
-  const data = sortedEntries.map(entry => entry[1])
+  // For hourly view, ensure we have enough data points
+  if (isHourlyView && sortedEntries.length < 24) {
+    // Fill in missing hours with interpolated or repeated values
+    const filledData = []
+    const startTime = new Date(cutoffDate)
+    for (let h = 0; h < 24; h++) {
+      const hourTime = new Date(startTime.getTime() + h * 60 * 60 * 1000)
+      const hourLabel = hourTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + hourTime.getHours().toString().padStart(2, '0') + ':00'
+      
+      const existingData = sortedEntries.find(e => e.label === hourLabel)
+      if (existingData) {
+        filledData.push(existingData)
+      } else if (filledData.length > 0) {
+        // Use the last known value
+        filledData.push({
+          label: hourLabel,
+          value: filledData[filledData.length - 1].value,
+          timestamp: hourTime
+        })
+      }
+    }
+    sortedEntries.splice(0, sortedEntries.length, ...filledData)
+  }
+  
+  const labels = sortedEntries.map(entry => entry.label)
+  const data = sortedEntries.map(entry => entry.value)
   
   return {
     labels,
@@ -462,6 +490,14 @@ const loadDashboardData = async () => {
     $fetch('/api/v1/fetchLiveBalance')
       .then(response => {
         if (response?.success && response.exchanges) {
+          // PRESERVE the allBalance historical data when updating!
+          const existingHistoricalData = {}
+          exchanges.value.forEach(ex => {
+            if (ex.allBalance) {
+              existingHistoricalData[ex.name] = ex.allBalance
+            }
+          })
+          
           exchanges.value = response.exchanges
             .filter(ex => !ex.error)
             .map(ex => ({
@@ -470,7 +506,9 @@ const loadDashboardData = async () => {
               totalUSD: ex.totalUSD || 0,
               chartData: formatChartData(ex.balance || []),
               timestamp: ex.timestamp,
-              isStale: false
+              isStale: false,
+              // PRESERVE historical data!
+              allBalance: existingHistoricalData[ex.exchange] || []
             }))
           message.success('Portfolio data updated')
         }
@@ -480,9 +518,9 @@ const loadDashboardData = async () => {
         isBackgroundRefreshing.value = false
       })
     
-    // Load these in background too
-    loadHistoricalData().catch(err => {})
-    loadPerformanceData().catch(err => {})
+    // Load these in background too - AWAIT to ensure 24h data is loaded
+    await loadHistoricalData().catch(err => console.error('Historical data error:', err))
+    await loadPerformanceData().catch(err => console.error('Performance data error:', err))
     
   } catch (err) {
     error.value = err.message || 'Failed to load dashboard data'
@@ -493,22 +531,51 @@ const loadDashboardData = async () => {
 
 const loadHistoricalData = async () => {
   try {
-    // Fetch historical balance data for portfolio chart
+    // Fetch historical balance data for portfolio chart AND 24h change calculation
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    let totalValue24hAgo = 0
+    
+    if (!exchanges.value || exchanges.value.length === 0) {
+      console.warn('No exchanges available for historical data')
+      return
+    }
+    
     const promises = exchanges.value.map(async (exchange) => {
-      const { data: response } = await $fetch('/api/v1/fetchUserDbBalance', {
+      const response = await $fetch('/api/v1/fetchUserDbBalance', {
         query: { exchange: exchange.name }
       })
-      return response?.data || []
+      const data = response?.data || []
+      
+      // Find the balance from ~24 hours ago for this exchange
+      if (data && data.length > 0) {
+        const balance24hAgo = data
+          .filter(b => new Date(b.timestamp) <= oneDayAgo)
+          .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]
+        
+        if (balance24hAgo) {
+          console.log(`Found 24h ago balance for ${exchange.name}: $${balance24hAgo.totalUSD}`)
+          totalValue24hAgo += balance24hAgo.totalUSD || 0
+        } else {
+          console.log(`No 24h ago balance found for ${exchange.name}`)
+        }
+      }
+      
+      return data
     })
     
     const historicalData = await Promise.all(promises)
+    
+    // Store 24h ago total for change calculation
+    portfolioHistory24h.value = totalValue24hAgo
+    console.log(`Total portfolio 24h ago: $${totalValue24hAgo}, Current: $${totalPortfolioValue.value}`)
+    
     // Store for use in history chart
     exchanges.value = exchanges.value.map((ex, index) => ({
       ...ex,
       allBalance: historicalData[index]
     }))
   } catch (err) {
-    // Silently fail
+    console.error('Error loading historical data:', err)
   }
 }
 
@@ -553,6 +620,14 @@ const fetchLiveDataInBackground = () => {
   $fetch('/api/v1/fetchLiveBalance')
     .then(response => {
       if (response?.success && response.exchanges) {
+        // PRESERVE the allBalance historical data when updating!
+        const existingHistoricalData = {}
+        exchanges.value.forEach(ex => {
+          if (ex.allBalance) {
+            existingHistoricalData[ex.name] = ex.allBalance
+          }
+        })
+        
         exchanges.value = response.exchanges
           .filter(ex => !ex.error)
           .map(ex => ({
@@ -561,7 +636,9 @@ const fetchLiveDataInBackground = () => {
             totalUSD: ex.totalUSD || 0,
             chartData: formatChartData(ex.balance || []),
             timestamp: ex.timestamp,
-            isStale: false
+            isStale: false,
+            // PRESERVE historical data!
+            allBalance: existingHistoricalData[ex.exchange] || []
           }))
         message.success('Portfolio data updated')
       }
@@ -673,10 +750,12 @@ const startAutoRefresh = () => {
             const index = exchanges.value.findIndex(ex => ex.name === newEx.exchange)
             if (index !== -1) {
               // Update existing exchange data without triggering full re-render
+              // PRESERVE historical data!
               exchanges.value[index].lastBalance = newEx.balance || []
               exchanges.value[index].totalUSD = newEx.totalUSD || 0
               exchanges.value[index].chartData = formatChartData(newEx.balance || [])
               exchanges.value[index].timestamp = newEx.timestamp
+              // Keep allBalance intact!
             }
           })
       }
@@ -696,7 +775,7 @@ const stopAutoRefresh = () => {
 // Start loading data immediately on component creation
 // Don't show spinner - we'll have data from cache almost instantly
 $fetch('/api/v1/fetchDatabaseBalance')
-  .then(cacheResponse => {
+  .then(async cacheResponse => {
     if (cacheResponse?.success && cacheResponse.exchanges) {
       exchanges.value = cacheResponse.exchanges
         .filter(ex => !ex.noData)
@@ -708,6 +787,10 @@ $fetch('/api/v1/fetchDatabaseBalance')
           timestamp: ex.timestamp,
           isStale: ex.isStale
         }))
+      
+      // Load historical data RIGHT AWAY to get 24h change
+      await loadHistoricalData()
+      await loadPerformanceData()
     }
     // Fetch live data in background
     fetchLiveDataInBackground()
@@ -802,26 +885,55 @@ onUnmounted(() => {
   margin-top: 16px;
 }
 
-.overview-grid {
+.overview-card {
   margin-bottom: 24px;
 }
 
-.stat-card {
-  height: 100%;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  padding: 8px 0;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.15);
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--n-text-color-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.value-main {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.value-sub {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 
 .stat-change {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 8px;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .stat-change.positive {
@@ -830,46 +942,6 @@ onUnmounted(() => {
 
 .stat-change.negative {
   color: #d03050;
-}
-
-.stat-suffix {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  font-weight: normal;
-}
-
-.asset-performance {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.asset-name {
-  font-weight: 500;
-  font-size: 16px;
-}
-
-.asset-change {
-  font-size: 14px;
-}
-
-.asset-change.positive {
-  color: #18a058;
-}
-
-.asset-change.negative {
-  color: #d03050;
-}
-
-.asset-value {
-  font-size: 14px;
-  color: #00D9FF;
-  font-weight: 500;
-}
-
-.update-time {
-  font-size: 14px;
-  color: var(--n-text-color-2);
 }
 
 .no-data {
@@ -966,6 +1038,13 @@ onUnmounted(() => {
 }
 
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .overview-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 16px;
@@ -975,6 +1054,21 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+  
+  .overview-stats {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .stat-item {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--n-border-color);
+  }
+  
+  .stat-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
   
   .exchange-header {
