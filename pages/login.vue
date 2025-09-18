@@ -95,15 +95,6 @@
         </n-form>
       </n-card>
 
-      <!-- Register Link -->
-      <n-card class="link-card">
-        <n-space justify="center" align="center">
-          <n-text>Don't have an account?</n-text>
-          <nuxt-link to="/register" class="auth-link">
-            <n-text type="primary" strong>Create Account</n-text>
-          </nuxt-link>
-        </n-space>
-      </n-card>
     </div>
   </div>
 </template>

@@ -9,8 +9,14 @@ import { userSchema } from "~/server/models/user.schema";
 import { createError } from 'h3';
 
 export default defineEventHandler(async (event) => {
+    // REGISTRATION DISABLED
+    throw createError({
+        statusCode: 403,
+        statusMessage: 'Registration is currently disabled. Please contact administrator.'
+    });
+
     const data = await readBody(event);
-    
+
     // Validate input
     if (!data.username || !data.password) {
         throw createError({ 

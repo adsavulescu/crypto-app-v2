@@ -19,9 +19,6 @@
             <nuxt-link v-if="!isAuthenticated" to="/login" class="nav-link">
               <n-text>Login</n-text>
             </nuxt-link>
-            <nuxt-link v-if="!isAuthenticated" to="/register" class="nav-link">
-              <n-text>Register</n-text>
-            </nuxt-link>
           </n-space>
         </n-space>
         <n-space align="center" :size="16">

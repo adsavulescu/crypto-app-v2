@@ -23,18 +23,6 @@
             <br />compounding small wins into significant portfolio growth.
           </n-text>
           <n-space :size="16" class="hero-buttons">
-            <nuxt-link v-if="!isAuthenticated" to="/register">
-              <n-button type="primary" size="large" class="cta-button primary-cta">
-                <template #icon>
-                  <n-icon>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                    </svg>
-                  </n-icon>
-                </template>
-                Register
-              </n-button>
-            </nuxt-link>
             <nuxt-link v-if="!isAuthenticated" to="/login">
               <n-button size="large" class="secondary-cta">
                 <template #icon>
@@ -382,11 +370,6 @@
         <n-text class="cta-subtitle">
           Precision Trading Services - Coming Soon
         </n-text>
-        <nuxt-link v-if="!isAuthenticated" to="/register">
-          <n-button type="primary" size="large" class="cta-button">
-            Get Early Access
-          </n-button>
-        </nuxt-link>
         <nuxt-link v-if="isAuthenticated" to="/dashboard">
           <n-button type="primary" size="large" class="cta-button">
             Go to Dashboard
