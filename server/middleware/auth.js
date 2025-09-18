@@ -33,11 +33,11 @@ export default defineEventHandler(async (event) => {
     // Extract and verify the access token
     const token = getCookie(event, 'access-token');
     
-    // Debug logging
-    console.log(`[AUTH] Checking auth for ${url}, token present:`, !!token);
-    if (token) {
-      console.log('[AUTH] Token preview:', token.substring(0, 20) + '...');
-    }
+    // Debug logging commented out - uncomment if needed for debugging
+    // console.log(`[AUTH] Checking auth for ${url}, token present:`, !!token);
+    // if (token) {
+    //   console.log('[AUTH] Token preview:', token.substring(0, 20) + '...');
+    // }
     
     if (!token) {
       throw createError({ 

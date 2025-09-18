@@ -109,7 +109,7 @@
                 <n-space vertical :size="12" style="width: 100%;">
                   <n-input-group size="large">
                     <n-input-group-label size="large">API Key</n-input-group-label>
-                    <n-input 
+                    <n-input
                       v-model:value="apiKeys[0].value"
                       placeholder="Enter your API key"
                       type="password"
@@ -119,9 +119,20 @@
                   </n-input-group>
                   <n-input-group size="large">
                     <n-input-group-label size="large">Secret</n-input-group-label>
-                    <n-input 
+                    <n-input
                       v-model:value="apiKeys[1].value"
                       placeholder="Enter your API secret"
+                      type="password"
+                      show-password-on="click"
+                      size="large"
+                    />
+                  </n-input-group>
+                  <!-- KuCoin Trading Password -->
+                  <n-input-group v-if="selectedExchange === 'kucoin'" size="large">
+                    <n-input-group-label size="large">Trading Password</n-input-group-label>
+                    <n-input
+                      v-model:value="apiKeys[2].value"
+                      placeholder="Enter your KuCoin trading password"
                       type="password"
                       show-password-on="click"
                       size="large"
@@ -132,9 +143,9 @@
             </n-grid-item>
 
             <n-grid-item>
-              <n-button 
-                @click="addExchange" 
-                :disabled="addBtn.disabled || !selectedExchange || !apiKeys[0].value || !apiKeys[1].value"
+              <n-button
+                @click="addExchange"
+                :disabled="addBtn.disabled || !selectedExchange || !apiKeys[0].value || !apiKeys[1].value || (selectedExchange === 'kucoin' && (!apiKeys[2] || !apiKeys[2].value))"
                 :loading="addBtn.disabled"
                 type="primary"
                 size="large"
@@ -388,10 +399,35 @@ const apiKeys = ref([
     }
 ]);
 
+// Watch for exchange selection to add password field for KuCoin
+watch(selectedExchange, (newExchange) => {
+    if (newExchange === 'kucoin') {
+        // Add password field if not already present
+        if (!apiKeys.value.find(k => k.key === 'password')) {
+            apiKeys.value.push({
+                key: "password",
+                value: ""
+            });
+        }
+    } else {
+        // Remove password field for other exchanges
+        apiKeys.value = apiKeys.value.filter(k => k.key !== 'password');
+    }
+});
+
 async function addExchange() {
     if (!selectedExchange.value || !apiKeys.value[0].value || !apiKeys.value[1].value) {
         message.error('Please fill in all required fields');
         return;
+    }
+
+    // Special validation for KuCoin password
+    if (selectedExchange.value === 'kucoin') {
+        const passwordField = apiKeys.value.find(k => k.key === 'password');
+        if (!passwordField || !passwordField.value) {
+            message.error('KuCoin requires a trading password');
+            return;
+        }
     }
 
     let data = {

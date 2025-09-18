@@ -18,8 +18,31 @@ export default defineNitroPlugin((nitroApp) => {
 
         placeBaseOrder: async function(bot) {
             let status = await nitroApp.ccxtw.fetchTicker(bot.userID, bot.exchange, bot.symbol);
+
+            // Check if ticker fetch was successful
+            if (!status.success || !status.data || !status.data.last) {
+                let log = `${this.getCurrentTime()}: ${bot.symbol} - PLACE_BASE_ORDER - Failed to fetch ticker price`;
+                bot.logs.push(log);
+                bot.activeDeal.status = 'ERROR_TICKER_FETCH_FAILED';
+                return log;
+            }
+
             let baseOrderPrice = status.data.last;
-            let baseOrderAmount = math.evaluate(`(${bot.baseOrderAmount} * ${bot.leverage}) / ${baseOrderPrice}`);
+
+            // Validate all required values before math evaluation
+            if (!bot.baseOrderAmount || !bot.leverage || !baseOrderPrice) {
+                let log = `${this.getCurrentTime()}: ${bot.symbol} - PLACE_BASE_ORDER - Missing required values: baseOrderAmount=${bot.baseOrderAmount}, leverage=${bot.leverage}, price=${baseOrderPrice}`;
+                bot.logs.push(log);
+                bot.activeDeal.status = 'ERROR_INVALID_PARAMETERS';
+                return log;
+            }
+
+            // Ensure numeric values
+            let baseOrderAmountNum = Number(bot.baseOrderAmount);
+            let leverageNum = Number(bot.leverage);
+            let baseOrderPriceNum = Number(baseOrderPrice);
+
+            let baseOrderAmount = math.evaluate(`(${baseOrderAmountNum} * ${leverageNum}) / ${baseOrderPriceNum}`);
             let side = this.getSide(bot);
             let log = null;
 
@@ -57,15 +80,40 @@ export default defineNitroPlugin((nitroApp) => {
                 bot.activeDeal.status = 'ERROR_BASE_ORDER_FAILED';
             }
 
-            bot.logs.push(log);
-            console.log(log);
+            if (log) {
+                bot.logs.push(log);
+                console.log(log);
+            }
 
             return bot;
         },
         placeSafetyOrder: async function(bot) {
             let sign = this.getSign(bot);
-            let safetyOrderPrice = math.evaluate(`${bot.activeDeal.filledOrders[bot.activeDeal.filledOrders.length -1].price} ${sign.mainSign} ((${bot.activeDeal.filledOrders[bot.activeDeal.filledOrders.length -1].price} / 100) * ${bot.safetyOrderPercent})`);
-            let safetyOrderAmount = math.evaluate(`(${bot.safetyOrderAmount} * ${bot.leverage}) / ${safetyOrderPrice}`);
+
+            // Validate filled orders exist
+            if (!bot.activeDeal.filledOrders || bot.activeDeal.filledOrders.length === 0) {
+                let log = `${this.getCurrentTime()}: ${bot.symbol} - PLACE_SAFETY_ORDER - No filled orders found`;
+                bot.logs.push(log);
+                bot.activeDeal.status = 'ERROR_NO_FILLED_ORDERS';
+                return log;
+            }
+
+            let lastOrder = bot.activeDeal.filledOrders[bot.activeDeal.filledOrders.length - 1];
+            if (!lastOrder || !lastOrder.price) {
+                let log = `${this.getCurrentTime()}: ${bot.symbol} - PLACE_SAFETY_ORDER - Invalid last order or price`;
+                bot.logs.push(log);
+                bot.activeDeal.status = 'ERROR_INVALID_LAST_ORDER';
+                return log;
+            }
+
+            // Ensure numeric values
+            let lastOrderPrice = Number(lastOrder.price);
+            let safetyOrderPercent = Number(bot.safetyOrderPercent);
+            let safetyOrderAmountNum = Number(bot.safetyOrderAmount);
+            let leverageNum = Number(bot.leverage);
+
+            let safetyOrderPrice = math.evaluate(`${lastOrderPrice} ${sign.mainSign} ((${lastOrderPrice} / 100) * ${safetyOrderPercent})`);
+            let safetyOrderAmount = math.evaluate(`(${safetyOrderAmountNum} * ${leverageNum}) / ${safetyOrderPrice}`);
             let side = this.getSide(bot);
             let log = null;
 
@@ -98,8 +146,10 @@ export default defineNitroPlugin((nitroApp) => {
                 bot.activeDeal.status = 'PLACE_TAKE_PROFIT_ORDER';
             }
 
-            bot.logs.push(log);
-            console.log(log);
+            if (log) {
+                bot.logs.push(log);
+                console.log(log);
+            }
 
             return bot;
         },
@@ -220,8 +270,10 @@ export default defineNitroPlugin((nitroApp) => {
                 bot.activeDeal.status = 'WAIT_FOR_FILLS';
             }
 
-            bot.logs.push(log);
-            console.log(log);
+            if (log) {
+                bot.logs.push(log);
+                console.log(log);
+            }
 
             return bot;
         },

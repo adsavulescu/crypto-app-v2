@@ -31,7 +31,7 @@ class CCXTW {
     }
 
     async getApiKeys(userID, exchange) {
-        let returnObj = [];
+        let returnObj = {};
         const userExchanges = await userExchangesSchema.findOne({userID, exchange});
 
         if (userExchanges) {
@@ -54,7 +54,7 @@ class CCXTW {
 
     async fetchExchangeInstance(exchange, keys) {
 
-        let exKeys = [];
+        let exKeys = {};
 
         for (let i = 0; i < keys.length; i++) {
             exKeys[keys[i].key] = keys[i].value;

@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
         setAuthCookies(event, newAccessToken, newRefreshToken);
         
         // Log token refresh
-        console.log(`[AUTH] Tokens refreshed for user: ${user.username} (${user._id})`);
+        // console.log(`[AUTH] Tokens refreshed for user: ${user.username} (${user._id})`);
         
         // Return success response
         return {

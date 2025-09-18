@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
                 }
             );
             
-            console.log(`[AUTH] User logged out: ${userId}`);
+            // console.log(`[AUTH] User logged out: ${userId}`);
         }
         
         // Clear all auth cookies

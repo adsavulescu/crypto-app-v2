@@ -151,8 +151,26 @@ function startScheduler(nitroApp) {
                 } catch (botError) {
                     console.error(`Error processing bot ${bot._id}:`, botError);
                     let errorLog = `${nitroApp.DCALib.getCurrentTime()}: ${bot.symbol} - ERROR: ${botError.message}`;
+
+                    // CRITICAL: If we're in a placing order state and get an error, we need to stop!
+                    // Otherwise we'll keep placing orders infinitely
+                    if (bot.activeDeal.status === 'PLACE_BASE_ORDER' ||
+                        bot.activeDeal.status === 'PLACE_SAFETY_ORDER' ||
+                        bot.activeDeal.status === 'PLACE_TAKE_PROFIT_ORDER' ||
+                        bot.activeDeal.status === 'PLACE_STOP_LOSS_ORDER') {
+                        bot.activeDeal.status = 'ERROR_CRITICAL';
+                        bot.isRunning = false; // Stop the bot to prevent damage
+                        errorLog += ' - BOT STOPPED TO PREVENT DUPLICATE ORDERS';
+                    }
+
                     bot.logs.push(errorLog);
-                    await dcaBotSchema.updateOne({_id: bot._id}, { $push: { logs: errorLog } });
+
+                    // Update the entire bot state including the status change
+                    await dcaBotSchema.updateOne({_id: bot._id}, {
+                        'activeDeal.status': bot.activeDeal.status,
+                        'isRunning': bot.isRunning,
+                        $push: { logs: errorLog }
+                    });
                 }
             }
         } catch (error) {

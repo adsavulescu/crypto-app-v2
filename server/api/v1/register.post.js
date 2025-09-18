@@ -117,7 +117,7 @@ export default defineEventHandler(async (event) => {
     setAuthCookies(event, accessToken, refreshToken);
     
     // Log successful registration
-    console.log(`[AUTH] New user registered: ${user.username} (${user._id})`);
+    // console.log(`[AUTH] New user registered: ${user.username} (${user._id})`);
     
     // Return success response (without sensitive information)
     return {

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
         await verifyPassword(data.password, dummyHash);
         
         // Log failed login attempt (for security monitoring)
-        console.log(`[AUTH] Failed login attempt for username: ${data.username}`);
+        // console.log(`[AUTH] Failed login attempt for username: ${data.username}`);
         
         throw createError({ 
             statusCode: 401, 
@@ -97,13 +97,13 @@ export default defineEventHandler(async (event) => {
     await user.save();
     
     // Set secure cookies
-    console.log('[AUTH] About to set auth cookies...');
+    // console.log('[AUTH] About to set auth cookies...');
     setAuthCookies(event, accessToken, refreshToken);
-    console.log('[AUTH] Auth cookies should be set now');
+    // console.log('[AUTH] Auth cookies should be set now');
     
     // Log for debugging
-    console.log('[AUTH] Login successful for user:', user.username, user._id.toString());
-    console.log('[AUTH] Access token generated:', accessToken.substring(0, 20) + '...');
+    // console.log('[AUTH] Login successful for user:', user.username, user._id.toString());
+    // console.log('[AUTH] Access token generated:', accessToken.substring(0, 20) + '...');
     
     // Return user data (without sensitive information)
     return {

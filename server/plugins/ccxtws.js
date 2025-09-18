@@ -28,7 +28,7 @@ class CCXTWS {
         
         // Check if exchange supports WebSocket via CCXT Pro
         if (!ccxt.pro || !ccxt.pro[exchange]) {
-            console.log(`[CCXTWS] ${exchange} not available in CCXT Pro`);
+            // console.log(`[CCXTWS] ${exchange} not available in CCXT Pro`);
             return null;
         }
 
@@ -46,7 +46,7 @@ class CCXTWS {
             await instance.loadMarkets();
             
             this.wsInstances.set(key, instance);
-            console.log(`[CCXTWS] WebSocket instance created for ${exchange} using CCXT Pro`);
+            // console.log(`[CCXTWS] WebSocket instance created for ${exchange} using CCXT Pro`);
             
             return instance;
         } catch (error) {
@@ -91,10 +91,10 @@ class CCXTWS {
             throw new Error(`WebSocket not supported for ${exchange}`);
         }
 
-        console.log(`[CCXTWS] Checking watchOHLCV support for ${exchange}:`, {
-            hasWatchOHLCV: instance.has?.watchOHLCV || false,
-            hasWatch: typeof instance.watchOHLCV === 'function'
-        });
+        // console.log(`[CCXTWS] Checking watchOHLCV support for ${exchange}:`, {
+        //     hasWatchOHLCV: instance.has?.watchOHLCV || false,
+        //     hasWatch: typeof instance.watchOHLCV === 'function'
+        // });
 
         // Check if exchange has watchOHLCV method
         if (typeof instance.watchOHLCV !== 'function') {
@@ -105,7 +105,7 @@ class CCXTWS {
         
         // If watcher already exists, just ensure subscription is active and return
         if (this.activeWatchers.has(subscriptionKey)) {
-            console.log(`[CCXTWS] OHLCV watcher already running for ${subscriptionKey}, reusing it`);
+            // console.log(`[CCXTWS] OHLCV watcher already running for ${subscriptionKey}, reusing it`);
             this.subscriptions.set(subscriptionKey, true);
             return;
         }
@@ -116,7 +116,7 @@ class CCXTWS {
         this.subscriptions.set(subscriptionKey, true);
         
         try {
-            console.log(`[CCXTWS] Starting OHLCV stream ${watcherId} for ${symbol} on ${exchange} with timeframe ${timeframe}`);
+            // console.log(`[CCXTWS] Starting OHLCV stream ${watcherId} for ${symbol} on ${exchange} with timeframe ${timeframe}`);
             
             let lastCandleTime = 0;
             
@@ -155,7 +155,7 @@ class CCXTWS {
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
-            console.log(`[CCXTWS] Stopped watching OHLCV for ${symbol} (${watcherId})`);
+            // console.log(`[CCXTWS] Stopped watching OHLCV for ${symbol} (${watcherId})`);
         } catch (error) {
             console.error(`[CCXTWS] Error watching OHLCV for ${symbol}:`, error.message);
             throw error;
@@ -172,10 +172,10 @@ class CCXTWS {
             throw new Error(`WebSocket not supported for ${exchange}`);
         }
 
-        console.log(`[CCXTWS] Checking watchTicker support for ${exchange}:`, {
-            hasWatchTicker: instance.has?.watchTicker || false,
-            hasWatch: typeof instance.watchTicker === 'function'
-        });
+        // console.log(`[CCXTWS] Checking watchTicker support for ${exchange}:`, {
+        //     hasWatchTicker: instance.has?.watchTicker || false,
+        //     hasWatch: typeof instance.watchTicker === 'function'
+        // });
 
         if (typeof instance.watchTicker !== 'function') {
             throw new Error(`${exchange} does not support watchTicker`);
@@ -185,7 +185,7 @@ class CCXTWS {
         
         // If watcher already exists, just ensure subscription is active and return
         if (this.activeWatchers.has(subscriptionKey)) {
-            console.log(`[CCXTWS] Ticker watcher already running for ${subscriptionKey}, reusing it`);
+            // console.log(`[CCXTWS] Ticker watcher already running for ${subscriptionKey}, reusing it`);
             this.subscriptions.set(subscriptionKey, true);
             return;
         }
@@ -196,7 +196,7 @@ class CCXTWS {
         this.subscriptions.set(subscriptionKey, true);
         
         try {
-            console.log(`[CCXTWS] Starting ticker stream ${watcherId} for ${symbol} on ${exchange}`);
+            // console.log(`[CCXTWS] Starting ticker stream ${watcherId} for ${symbol} on ${exchange}`);
             
             let lastTickerTime = 0;
             
@@ -234,7 +234,7 @@ class CCXTWS {
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
-            console.log(`[CCXTWS] Stopped watching ticker for ${symbol} (${watcherId})`);
+            // console.log(`[CCXTWS] Stopped watching ticker for ${symbol} (${watcherId})`);
         } catch (error) {
             console.error(`[CCXTWS] Error watching ticker for ${symbol}:`, error.message);
             throw error;
@@ -259,7 +259,7 @@ class CCXTWS {
         
         // If watcher already exists, just ensure subscription is active and return
         if (this.activeWatchers.has(subscriptionKey)) {
-            console.log(`[CCXTWS] Order book watcher already running for ${subscriptionKey}, reusing it`);
+            // console.log(`[CCXTWS] Order book watcher already running for ${subscriptionKey}, reusing it`);
             this.subscriptions.set(subscriptionKey, true);
             return;
         }
@@ -270,7 +270,7 @@ class CCXTWS {
         this.subscriptions.set(subscriptionKey, true);
         
         try {
-            console.log(`[CCXTWS] Starting order book stream ${watcherId} for ${symbol} on ${exchange}`);
+            // console.log(`[CCXTWS] Starting order book stream ${watcherId} for ${symbol} on ${exchange}`);
             
             while (this.subscriptions.has(subscriptionKey) && this.activeWatchers.get(subscriptionKey) === watcherId) {
                 const orderBook = await instance.watchOrderBook(symbol);
@@ -283,7 +283,7 @@ class CCXTWS {
                     break;
                 }
             }
-            console.log(`[CCXTWS] Stopped watching order book for ${symbol} (${watcherId})`);
+            // console.log(`[CCXTWS] Stopped watching order book for ${symbol} (${watcherId})`);
         } catch (error) {
             console.error(`[CCXTWS] Error watching order book for ${symbol}:`, error);
             throw error;
@@ -307,7 +307,7 @@ class CCXTWS {
         const subscriptionKey = `${exchange}:${symbol}:trades`;
         
         try {
-            console.log(`[CCXTWS] Starting trades stream for ${symbol} on ${exchange}`);
+            // console.log(`[CCXTWS] Starting trades stream for ${symbol} on ${exchange}`);
             
             while (true) {
                 const trades = await instance.watchTrades(symbol);
@@ -361,7 +361,7 @@ class CCXTWS {
                 }
             }
             
-            console.log(`[CCXTWS] Closed WebSocket connection for ${exchange}`);
+            // console.log(`[CCXTWS] Closed WebSocket connection for ${exchange}`);
         }
     }
 
@@ -379,7 +379,7 @@ class CCXTWS {
         this.subscriptions.clear();
         this.activeWatchers.clear();
         
-        console.log('[CCXTWS] All WebSocket connections closed');
+        // console.log('[CCXTWS] All WebSocket connections closed');
     }
 }
 
@@ -396,5 +396,5 @@ export default defineNitroPlugin((nitroApp) => {
     await ccxtwsInstance.closeAll();
   });
   
-  console.log('[CCXTWS] WebSocket wrapper initialized');
+  // console.log('[CCXTWS] WebSocket wrapper initialized');
 });

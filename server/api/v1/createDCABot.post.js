@@ -17,10 +17,10 @@ export default defineEventHandler(async (event) => {
     // Override userID with authenticated userId for security
     data.userID = userId;
     
-    if (!data.exchange || !data.pair || !data.baseOrderSize) {
-        throw createError({ 
-            statusCode: 400, 
-            statusMessage: 'Exchange, pair, and base order size are required' 
+    if (!data.exchange || !data.symbol || !data.baseOrderAmount) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Exchange, symbol, and base order amount are required'
         });
     }
 
